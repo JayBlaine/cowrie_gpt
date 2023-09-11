@@ -6,8 +6,9 @@ from typing import Optional
 
 from twisted.conch.telnet import StatefulTelnetProtocol, TelnetTransport
 from twisted.internet import defer
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.internet.protocol import ClientFactory
+from twisted.python import log
 
 
 class TelnetConnectionError(Exception):
@@ -38,14 +39,14 @@ class TelnetClient(StatefulTelnetProtocol):
         when we detect the shell prompt.
         TODO: Need to handle authentication failure
         """
-        if self.factory.prompt.strip() == br"#":
-            self.re_prompt = re.compile(br"#")
+        if self.factory.prompt.strip() == rb"#":
+            self.re_prompt = re.compile(rb"#")
         else:
             self.re_prompt = re.compile(self.factory.prompt.encode())
 
-        if re.search(br"([Ll]ogin:\s+$)", data):
+        if re.search(rb"([Ll]ogin:\s+$)", data):
             self.sendLine(self.factory.username.encode())
-        elif re.search(br"([Pp]assword:\s+$)", data):
+        elif re.search(rb"([Pp]assword:\s+$)", data):
             self.sendLine(self.factory.password.encode())
         elif self.re_prompt.search(data):
             self.setLineMode()
@@ -67,7 +68,7 @@ class TelnetClient(StatefulTelnetProtocol):
 
         # start countdown to command done (when reached, consider the output was completely received and close)
         if not self.done_callback:
-            self.done_callback = reactor.callLater(0.5, self.close)  # type: ignore[attr-defined]
+            self.done_callback = reactor.callLater(0.5, self.close)  # type: ignore
         else:
             self.done_callback.reset(0.5)
 
@@ -76,7 +77,7 @@ class TelnetClient(StatefulTelnetProtocol):
         Sends a command via Telnet using line mode
         """
         self.command = command.encode()
-        self.sendLine(self.command)
+        self.sendLine(self.command)  # ignore: attr-defined
 
     def close(self):
         """
@@ -111,7 +112,7 @@ class TelnetFactory(ClientFactory):
         return transport
 
     def clientConnectionFailed(self, connector, reason):
-        print(f"Telnet connection failed. Reason: {reason}")
+        log.err(f"Telnet connection failed. Reason: {reason}")
 
 
 class TelnetClientCommand:
@@ -129,7 +130,7 @@ class TelnetClientCommand:
         factory = TelnetFactory(
             username, password, self.prompt, self.command, done_deferred, self.callback
         )
-        reactor.connectTCP(host, port, factory)  # type: ignore[attr-defined]
+        reactor.connectTCP(host, port, factory)
 
         return done_deferred
 

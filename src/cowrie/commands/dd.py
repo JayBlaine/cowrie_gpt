@@ -22,11 +22,13 @@ class Command_dd(HoneyPotCommand):
     dd command
     """
 
-    ddargs: dict[str, str] = {}
+    ddargs: dict[str, str]
 
-    def start(self):
+    def start(self) -> None:
         if not self.args or self.args[0] == ">":
             return
+
+        self.ddargs = {}
 
         for arg in self.args:
             if arg.find("=") == -1:
@@ -83,14 +85,14 @@ class Command_dd(HoneyPotCommand):
 
                 self.exit(success=bSuccess)
 
-    def exit(self, success=True):
+    def exit(self, success: bool = True) -> None:
         if success is True:
             self.write("0+0 records in\n")
             self.write("0+0 records out\n")
             self.write("0 bytes transferred in 0.695821 secs (0 bytes/sec)\n")
         HoneyPotCommand.exit(self)
 
-    def lineReceived(self, line):
+    def lineReceived(self, line: str) -> None:
         log.msg(
             eventid="cowrie.session.input",
             realm="dd",
@@ -98,11 +100,11 @@ class Command_dd(HoneyPotCommand):
             format="INPUT (%(realm)s): %(input)s",
         )
 
-    def handle_CTRL_D(self):
+    def handle_CTRL_D(self) -> None:
         self.exit()
 
 
-def parse_size(param):
+def parse_size(param: str) -> int:
     """
     Parse dd arguments that indicate block sizes
     Return 0 in case of illegal input

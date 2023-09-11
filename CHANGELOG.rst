@@ -1,6 +1,30 @@
 Release Notes
 #############
 
+Release 2.5.0
+*************
+
+* Datadog output module (Fred Baguelin <frederic.baguelin@datadoghq.com>)
+* General improvements to shell expansion handling
+* New version of Twisted supported
+* Python 3.11 support
+* Pypy 3.9 support
+* Add session type to Telegram output
+
+Release 2.4.0
+*************
+
+* Deprecate Python 3.7
+* Early support for Python 3.11
+* ThreatJammer output plugin (@diegoparrilla)
+* Telegram output plugin (@Louren)
+* Discord output plugin (@CyberSparkNL)
+* Updated mongodb output plugin
+* Dependency upgrades
+* Docker repo merged with this one
+* `wget` and `curl` rewritten using `treq`.
+* Migrate test framework from trial to unittest (@lazycrazyowl)
+
 Release 2.3.0
 *************
 

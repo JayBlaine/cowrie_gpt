@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from configparser import NoOptionError
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 from twisted.conch.openssh_compat import primes
 from twisted.conch.ssh import factory, keys, transport
@@ -32,17 +32,19 @@ class CowrieSSHFactory(factory.SSHFactory):
     """
 
     starttime: Optional[float] = None
-    privateKeys: Dict[bytes, bytes] = {}
-    publicKeys: Dict[bytes, bytes] = {}
+    privateKeys: dict[bytes, bytes]
+    publicKeys: dict[bytes, bytes]
     primes = None
     portal: Optional[tp.Portal] = None  # gets set by plugin
-    ourVersionString: str = CowrieConfig.get(
+    ourVersionString: bytes = CowrieConfig.get(
         "ssh", "version", fallback="SSH-2.0-OpenSSH_6.0p1 Debian-4+deb7u2"
-    )
+    ).encode("ascii")
 
     def __init__(self, backend, pool_handler):
         self.pool_handler = pool_handler
         self.backend: str = backend
+        self.privateKeys = {}
+        self.publicKeys = {}
         self.services = {
             b"ssh-userauth": ProxySSHAuthServer
             if self.backend == "proxy"
@@ -56,7 +58,7 @@ class CowrieSSHFactory(factory.SSHFactory):
         Special delivery to the loggers to avoid scope problems
         """
         args["sessionno"] = "S{}".format(args["sessionno"])
-        for output in self.tac.output_plugins:  # type: ignore[attr-defined]
+        for output in self.tac.output_plugins:
             output.logDispatch(**args)
 
     def startFactory(self):
@@ -101,7 +103,7 @@ class CowrieSSHFactory(factory.SSHFactory):
         # this can come from backend in the future, check HonSSH's slim client
         self.ourVersionString = CowrieConfig.get(
             "ssh", "version", fallback="SSH-2.0-OpenSSH_6.0p1 Debian-4+deb7u2"
-        )
+        ).encode("ascii")
 
         factory.SSHFactory.startFactory(self)
         log.msg("Ready to accept SSH connections")

@@ -10,7 +10,7 @@ import logging
 from hpfeeds.twisted import ClientSessionService
 
 from twisted.internet import endpoints, ssl
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.python import log
 
 import cowrie.core.output
@@ -106,7 +106,7 @@ class Output(cowrie.core.output.Output):
 
         elif entry["eventid"] == "cowrie.log.closed":
             # entry["ttylog"]
-            with open(entry["ttylog"], 'rb') as ttylog:
+            with open(entry["ttylog"], "rb") as ttylog:
                 self.meta[session]["ttylog"] = ttylog.read().hex()
 
         elif entry["eventid"] == "cowrie.session.closed":

@@ -26,7 +26,7 @@ from twisted.conch.ssh.filetransfer import (
 from twisted.python import log
 from twisted.python.compat import nativeString
 
-import cowrie.shell.pwd as pwd
+from cowrie.shell import pwd
 from cowrie.core.config import CowrieConfig
 
 
@@ -102,23 +102,17 @@ class CowrieSFTPDirectory:
     def __init__(self, server, directory):
         self.server = server
         self.files = server.fs.listdir(directory)
-        self.files = [".", ".."] + self.files
+        self.files = [".", "..", *self.files]
         self.dir = directory
 
     def __iter__(self):
         return self
 
-    def next(self):
-        """
-        Py2 compatibility
-        """
-        return self.__next__()
-
     def __next__(self):
         try:
             f = self.files.pop(0)
         except IndexError:
-            raise StopIteration
+            raise StopIteration from None
 
         if f == "..":
             directory = self.dir.strip().split("/")

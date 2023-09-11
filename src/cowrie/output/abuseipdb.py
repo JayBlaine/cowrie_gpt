@@ -43,7 +43,7 @@ from time import sleep, time
 from treq import post
 
 from twisted.internet import defer, threads
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.python import log
 from twisted.web import http
 
@@ -53,7 +53,7 @@ from cowrie.core.config import CowrieConfig
 # How often we clean and dump and our lists/dict...
 CLEAN_DUMP_SCHED = 600
 # ...and the file we dump to.
-DUMP_FILE = "aipdb.dump"
+DUMP_FILE: str = "aipdb.dump"
 
 ABUSEIP_URL = "https://api.abuseipdb.com/api/v2/report"
 # AbuseIPDB will just 429 us if we report an IP too often; currently 15 minutes
@@ -63,11 +63,10 @@ REREPORT_MINIMUM = 900
 
 class Output(output.Output):
     def start(self):
-        self.tolerance_attempts = CowrieConfig.getint(
+        self.tolerance_attempts: int = CowrieConfig.getint(
             "output_abuseipdb", "tolerance_attempts", fallback=10
         )
-        self.state_path = CowrieConfig.get("output_abuseipdb", "dump_path")
-        self.state_path = Path(*(d for d in self.state_path.split("/")))
+        self.state_path = Path(CowrieConfig.get("output_abuseipdb", "dump_path"))
         self.state_dump = self.state_path / DUMP_FILE
 
         self.logbook = LogBook(self.tolerance_attempts, self.state_dump)
@@ -84,8 +83,8 @@ class Output(output.Output):
             # Check to see if we're still asleep after receiving a Retry-After
             # header in a previous response
             if self.logbook["sleeping"]:
-                t_wake = self.logbook["sleep_until"]
-                t_now = time()
+                t_wake: float = self.logbook["sleep_until"]
+                t_now: float = time()
                 if t_wake > t_now:
                     # If we're meant to be asleep, we'll set logbook.sleep to
                     # true and logbook.sleep_until to the time we can wake-up
@@ -93,7 +92,7 @@ class Output(output.Output):
                     self.logbook.sleep_until = t_wake
                     # and we set an alarm so the reactor knows when he can drag
                     # us back out of bed
-                    reactor.callLater(t_wake - t_now, self.logbook.wakeup)  # type: ignore[attr-defined]
+                    reactor.callLater(t_wake - t_now, self.logbook.wakeup)
 
             del self.logbook["sleeping"]
             del self.logbook["sleep_until"]
@@ -199,12 +198,12 @@ class LogBook(dict):
 
     def __init__(self, tolerance_attempts, state_dump):
         self.sleeping = False
-        self.sleep_until = 0
+        self.sleep_until: float = 0.0
         self.tolerance_attempts = tolerance_attempts
-        self.tolerance_window = 60 * CowrieConfig.getint(
+        self.tolerance_window: int = 60 * CowrieConfig.getint(
             "output_abuseipdb", "tolerance_window", fallback=120
         )
-        self.rereport_after = 3600 * CowrieConfig.getfloat(
+        self.rereport_after: float = 3600 * CowrieConfig.getfloat(
             "output_abuseipdb", "rereport_after", fallback=24
         )
         if self.rereport_after < REREPORT_MINIMUM:
@@ -220,7 +219,7 @@ class LogBook(dict):
         # This is the method we pass in a callLater() before we go to sleep.
         self.sleeping = False
         self.sleep_until = 0
-        self.recall = reactor.callLater(CLEAN_DUMP_SCHED, self.cleanup_and_dump_state)  # type: ignore[attr-defined]
+        self.recall = reactor.callLater(CLEAN_DUMP_SCHED, self.cleanup_and_dump_state)
         log.msg(
             eventid="cowrie.abuseipdb.wakeup",
             format="AbuseIPDB plugin resuming activity after receiving "
@@ -300,7 +299,7 @@ class LogBook(dict):
         self.dump_state()
 
         if mode == 0 and not self.sleeping:
-            self.recall = reactor.callLater(  # type: ignore[attr-defined]
+            self.recall = reactor.callLater(
                 CLEAN_DUMP_SCHED, self.cleanup_and_dump_state
             )
 
@@ -315,7 +314,7 @@ class LogBook(dict):
         for k, v in self.items():
             dump[k] = v
 
-        reactor.callInThread(self.write_dump_file, dump)  # type: ignore[attr-defined]
+        reactor.callInThread(self.write_dump_file, dump)
 
     def write_dump_file(self, dump):
         # Check self._writing; waits for release; timeout after 10 seconds.
@@ -359,7 +358,7 @@ class Reporter:
             "ip": ip,
             "categories": "18,22",
             "comment": "Cowrie Honeypot: Unauthorised SSH/Telnet login attempt "
-            'with user "{}" at {}'.format(uname, t),
+            f'with user "{uname}" at {t}',
         }
 
         self.http_request(params)
@@ -473,7 +472,7 @@ class Reporter:
 
             self.logbook.sleeping = True
             self.logbook.sleep_until = time() + retry
-            reactor.callLater(retry, self.logbook.wakeup)  # type: ignore[attr-defined]
+            reactor.callLater(retry, self.logbook.wakeup)
             # It's not serious if we don't, but it's best to call the clean-up
             # after logbook.sleeping has been set to True. The clean-up method
             # checks for this flag and will use the wake-up time rather than

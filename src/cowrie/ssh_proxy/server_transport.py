@@ -37,7 +37,7 @@ from hashlib import md5
 
 from twisted.conch.ssh import transport
 from twisted.conch.ssh.common import getNS
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.internet.endpoints import TCP4ClientEndpoint
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import log, randbytes
@@ -55,6 +55,10 @@ class FrontendSSHTransport(transport.SSHServerTransport, TimeoutMixin):
     After both sides are authenticated, forward all things from one side to another.
     """
 
+    buf: bytes
+    ourVersionString: bytes
+    gotVersion: bool
+
     # TODO merge this with HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin)
     # maybe create a parent class with common methods for the two
     def __init__(self):
@@ -64,9 +68,9 @@ class FrontendSSHTransport(transport.SSHServerTransport, TimeoutMixin):
         self.disconnected = False  # what was this used for
 
         self.peer_ip = None
-        self.peer_port = 0
+        self.peer_port: int = 0
         self.local_ip = None
-        self.local_port = 0
+        self.local_port: int = 0
 
         self.startTime = None
         self.transportId = None
@@ -93,12 +97,11 @@ class FrontendSSHTransport(transport.SSHServerTransport, TimeoutMixin):
         self.local_ip = self.transport.getHost().host
         self.local_port = self.transport.getHost().port
 
-        self.transport.write(f"{self.ourVersionString}\r\n".encode())
+        self.transport.write(self.ourVersionString + b"\r\n")
         self.currentEncryptions = transport.SSHCiphers(
             b"none", b"none", b"none", b"none"
         )
         self.currentEncryptions.setKeys(b"", b"", b"", b"", b"", b"")
-        self.otherVersionString: bytes = b"Unknown"
 
         log.msg(
             eventid="cowrie.session.connect",
@@ -216,12 +219,10 @@ class FrontendSSHTransport(transport.SSHServerTransport, TimeoutMixin):
                 ),
                 format="Remote SSH version: %(version)s",
             )
-            m = re.match(br"SSH-(\d+.\d+)-(.*)", self.otherVersionString)
+            m = re.match(rb"SSH-(\d+.\d+)-(.*)", self.otherVersionString)
             if m is None:
                 log.msg(
-                    "Bad protocol version identification: {}".format(
-                        repr(self.otherVersionString)
-                    )
+                    f"Bad protocol version identification: {self.otherVersionString!r}"
                 )
                 if self.transport:
                     self.transport.write(b"Protocol mismatch.\n")
@@ -305,9 +306,7 @@ class FrontendSSHTransport(transport.SSHServerTransport, TimeoutMixin):
         cencCS = ",".join([alg.decode("utf-8") for alg in encCS])
         cmacCS = ",".join([alg.decode("utf-8") for alg in macCS])
         ccompCS = ",".join([alg.decode("utf-8") for alg in compCS])
-        hasshAlgorithms = "{kex};{enc};{mac};{cmp}".format(
-            kex=ckexAlgs, enc=cencCS, mac=cmacCS, cmp=ccompCS
-        )
+        hasshAlgorithms = f"{ckexAlgs};{cencCS};{cmacCS};{ccompCS}"
         hassh = md5(hasshAlgorithms.encode("utf-8")).hexdigest()
 
         log.msg(

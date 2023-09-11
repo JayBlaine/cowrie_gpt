@@ -16,15 +16,15 @@ commands = {}
 
 
 class Command_unzip(HoneyPotCommand):
-    def mkfullpath(self, path, f):
-        l, d = path.split("/"), []
-        while len(l):
-            d.append(l.pop(0))
+    def mkfullpath(self, path: str) -> None:
+        components, d = path.split("/"), []
+        while len(components):
+            d.append(components.pop(0))
             dir = "/" + "/".join(d)
             if not self.fs.exists(dir):
                 self.fs.mkdir(dir, 0, 0, 4096, 33188)
 
-    def call(self):
+    def call(self) -> None:
         if len(self.args) == 0 or self.args[0].startswith("-"):
             output = (
                 "UnZip 6.00 of 20 April 2009, by Debian. Original by Info-ZIP.\n"
@@ -59,17 +59,13 @@ class Command_unzip(HoneyPotCommand):
         path = self.fs.resolve_path(filename, self.protocol.cwd)
         if not path:
             self.write(
-                "unzip:  cannot find or open {0}, {0}.zip or {0}.ZIP.\n".format(
-                    filename
-                )
+                f"unzip:  cannot find or open {filename}, {filename}.zip or {filename}.ZIP.\n"
             )
             return
         if not self.protocol.fs.exists(path):
             if not self.protocol.fs.exists(path + ".zip"):
                 self.write(
-                    "unzip:  cannot find or open {0}, {0}.zip or {0}.ZIP.\n".format(
-                        filename
-                    )
+                    f"unzip:  cannot find or open {filename}, {filename}.zip or {filename}.ZIP.\n"
                 )
                 return
             else:
@@ -85,9 +81,7 @@ class Command_unzip(HoneyPotCommand):
             )
             self.write(output)
             self.write(
-                "unzip:  cannot find or open {0}, {0}.zip or {0}.ZIP.\n".format(
-                    filename
-                )
+                f"unzip:  cannot find or open {filename}, {filename}.zip or {filename}.ZIP.\n"
             )
             return
 
@@ -102,9 +96,7 @@ class Command_unzip(HoneyPotCommand):
             )
             self.write(output)
             self.write(
-                "unzip:   cannot find zipfile directory in one of {0}, {0}.zip or {0}.ZIP.\n".format(
-                    filename
-                )
+                f"unzip:  cannot find or open {filename}, {filename}.zip or {filename}.ZIP.\n"
             )
             return
         self.write(f"Archive:  {filename}\n")
@@ -116,7 +108,7 @@ class Command_unzip(HoneyPotCommand):
             if f.is_dir():
                 self.fs.mkdir(dest, 0, 0, 4096, 33188)
             elif not f.is_dir():
-                self.mkfullpath(os.path.dirname(dest), f)
+                self.mkfullpath(os.path.dirname(dest))
                 self.fs.mkfile(dest, 0, 0, f.file_size, 33188)
             else:
                 log.msg(f"  skipping: {f.filename}\n")

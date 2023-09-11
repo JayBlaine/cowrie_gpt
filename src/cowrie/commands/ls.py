@@ -8,7 +8,7 @@ import os.path
 import stat
 import time
 
-import cowrie.shell.fs as fs
+from cowrie.shell import fs
 from cowrie.shell.command import HoneyPotCommand
 from cowrie.shell.pwd import Group, Passwd
 
@@ -16,19 +16,21 @@ commands = {}
 
 
 class Command_ls(HoneyPotCommand):
-    def uid2name(self, uid):
+    def uid2name(self, uid: int) -> str:
         try:
-            return Passwd().getpwuid(uid)["pw_name"]
+            name: str = Passwd().getpwuid(uid)["pw_name"]
+            return name
         except Exception:
             return str(uid)
 
-    def gid2name(self, gid):
+    def gid2name(self, gid: int) -> str:
         try:
-            return Group().getgrgid(gid)["gr_name"]
+            group: str = Group().getgrgid(gid)["gr_name"]
+            return group
         except Exception:
             return str(gid)
 
-    def call(self):
+    def call(self) -> None:
         path = self.protocol.cwd
         paths = []
         self.showHidden = False
@@ -47,7 +49,7 @@ class Command_ls(HoneyPotCommand):
             self.write("Try 'ls --help' for more information.\n")
             return
 
-        for x, a in opts:
+        for x, _a in opts:
             if x in ("-l"):
                 func = self.do_ls_l
             if x in ("-a"):
@@ -87,7 +89,7 @@ class Command_ls(HoneyPotCommand):
             return
         return files
 
-    def do_ls_normal(self, path):
+    def do_ls_normal(self, path: str) -> None:
         files = self.get_dir_files(path)
         if not files:
             return
@@ -112,7 +114,7 @@ class Command_ls(HoneyPotCommand):
             count += 1
         self.write("\n")
 
-    def do_ls_l(self, path):
+    def do_ls_l(self, path: str) -> None:
         files = self.get_dir_files(path)
         if not files:
             return

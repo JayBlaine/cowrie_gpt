@@ -28,6 +28,8 @@ class HoneyPotTelnetFactory(protocol.ServerFactory):
 
     tac: IPlugin
     portal: tp.Portal | None = None  # gets set by Twisted plugin
+    banner: bytes
+    starttime: float
 
     def __init__(self, backend, pool_handler):
         self.backend: str = backend
@@ -40,14 +42,15 @@ class HoneyPotTelnetFactory(protocol.ServerFactory):
         Special delivery to the loggers to avoid scope problems
         """
         args["sessionno"] = "T{}".format(str(args["sessionno"]))
-        for output in self.tac.output_plugins:  # type: ignore[attr-defined]
+        for output in self.tac.output_plugins:
             output.logDispatch(**args)
 
     def startFactory(self):
         try:
             honeyfs = CowrieConfig.get("honeypot", "contents_path")
             issuefile = honeyfs + "/etc/issue.net"
-            self.banner = open(issuefile, "rb").read()
+            with open(issuefile, "rb") as banner:
+                self.banner = banner.read()
         except OSError:
             self.banner = b""
 

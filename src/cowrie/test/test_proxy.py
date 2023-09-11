@@ -1,5 +1,4 @@
 # -*- test-case-name: Cowrie Proxy Test Cases -*-
-#mypy: ignore  # noqa
 
 # Copyright (c) 2019 Guilherme Borges
 # See LICENSE for details.
@@ -14,7 +13,7 @@ from cowrie.core.realm import HoneyPotRealm
 from cowrie.ssh.factory import CowrieSSHFactory
 
 from twisted.cred import portal
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 
 # from cowrie.test.proxy_compare import ProxyTestCommand
 
@@ -67,7 +66,7 @@ class ProxyTests(unittest.TestCase):
         # ################################################# #
         # setup SSH backend
         self.factory_shell_ssh = create_ssh_factory("shell")
-        self.shell_server_ssh = reactor.listenTCP(  # type: ignore[attr-defined]
+        self.shell_server_ssh = reactor.listenTCP(
             self.PORT_BACKEND_SSH, self.factory_shell_ssh
         )
 
@@ -83,7 +82,7 @@ class ProxyTests(unittest.TestCase):
 
         # setup SSH proxy
         self.factory_proxy_ssh = create_ssh_factory("proxy")
-        self.proxy_server_ssh = reactor.listenTCP(  # type: ignore[attr-defined]
+        self.proxy_server_ssh = reactor.listenTCP(
             self.PORT_PROXY_SSH, self.factory_proxy_ssh
         )
 

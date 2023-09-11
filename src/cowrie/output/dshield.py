@@ -14,7 +14,7 @@ import time
 import dateutil.parser
 import requests
 
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.internet import threads
 from twisted.python import log
 
@@ -26,6 +26,11 @@ class Output(cowrie.core.output.Output):
     """
     dshield output
     """
+
+    debug: bool = False
+    userid: str
+    batch_size: int
+    batch: list
 
     def start(self):
         self.auth_key = CowrieConfig.get("output_dshield", "auth_key")
@@ -45,7 +50,7 @@ class Output(cowrie.core.output.Output):
             date = dateutil.parser.parse(entry["timestamp"])
             self.batch.append(
                 {
-                    "date": date.date().__str__(),
+                    "date": str(date.date()),
                     "time": date.time().strftime("%H:%M:%S"),
                     "timezone": time.strftime("%z"),
                     "source_ip": entry["src_ip"],
@@ -100,7 +105,7 @@ class Output(cowrie.core.output.Output):
         headers = {"X-ISC-Authorization": auth_header, "Content-Type": "text/plain"}
 
         if self.debug:
-            log.msg(f"dshield: posting: {repr(headers)}")
+            log.msg(f"dshield: posting: {headers!r}")
             log.msg(f"dshield: posting: {log_output}")
 
         req = threads.deferToThread(
@@ -120,9 +125,11 @@ class Output(cowrie.core.output.Output):
                 log.msg(f"dshield: status code {resp.status_code}")
                 log.msg(f"dshield: response {resp.content}")
 
-            if resp.status_code == requests.codes.ok:
+            if resp.ok:
                 sha1_regex = re.compile(r"<sha1checksum>([^<]+)<\/sha1checksum>")
                 sha1_match = sha1_regex.search(response)
+                sha1_local = hashlib.sha1()
+                sha1_local.update(log_output.encode("utf8"))
                 if sha1_match is None:
                     log.msg(
                         "dshield: ERROR: Could not find sha1checksum in response: {}".format(
@@ -130,33 +137,31 @@ class Output(cowrie.core.output.Output):
                         )
                     )
                     failed = True
-                sha1_local = hashlib.sha1()
-                sha1_local.update(log_output.encode("utf8"))
-                if sha1_match.group(1) != sha1_local.hexdigest():
+                elif sha1_match.group(1) != sha1_local.hexdigest():
                     log.msg(
                         "dshield: ERROR: SHA1 Mismatch {} {} .".format(
                             sha1_match.group(1), sha1_local.hexdigest()
                         )
                     )
                     failed = True
+
                 md5_regex = re.compile(r"<md5checksum>([^<]+)<\/md5checksum>")
                 md5_match = md5_regex.search(response)
+                md5_local = hashlib.md5()
+                md5_local.update(log_output.encode("utf8"))
                 if md5_match is None:
                     log.msg("dshield: ERROR: Could not find md5checksum in response")
                     failed = True
-                md5_local = hashlib.md5()
-                md5_local.update(log_output.encode("utf8"))
-                if md5_match.group(1) != md5_local.hexdigest():
+                elif md5_match.group(1) != md5_local.hexdigest():
                     log.msg(
                         "dshield: ERROR: MD5 Mismatch {} {} .".format(
                             md5_match.group(1), md5_local.hexdigest()
                         )
                     )
                     failed = True
+
                 log.msg(
-                    "dshield: SUCCESS: Sent {} bytes worth of data to secure.dshield.org".format(
-                        len(log_output)
-                    )
+                    f"dshield: SUCCESS: Sent {log_output} bytes worth of data to secure.dshield.org"
                 )
             else:
                 log.msg(f"dshield ERROR: error {resp.status_code}.")
@@ -165,6 +170,6 @@ class Output(cowrie.core.output.Output):
 
             if failed:
                 # Something went wrong, we need to add them to batch.
-                reactor.callFromThread(self.transmission_error, batch)  # type: ignore[attr-defined]
+                reactor.callFromThread(self.transmission_error, batch)
 
         req.addCallback(check_response)

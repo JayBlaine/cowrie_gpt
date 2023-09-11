@@ -30,15 +30,17 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Callable, ClassVar
+from typing import ClassVar
+from collections.abc import Callable
 
 from zope.interface import implementer, provider
+from incremental import Version
 
 from twisted._version import __version__ as __twisted_version__
 from twisted.application import service
 from twisted.application.service import IServiceMaker
 from twisted.cred import portal
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.logger import ILogObserver, globalLogPublisher
 from twisted.plugin import IPlugin
 from twisted.python import log, usage
@@ -54,7 +56,7 @@ from cowrie.core.config import CowrieConfig
 from cowrie.core.utils import create_endpoint_services, get_endpoints_from_section
 from cowrie.pool_interface.handler import PoolHandler
 
-if __twisted_version__.major < 20:
+if __twisted_version__ < Version("Twisted", 20, 0, 0):
     raise ImportError(
         "Your version of Twisted is too old. Please ensure your virtual environment is set up correctly."
     )
@@ -66,8 +68,8 @@ class Options(usage.Options):
     """
 
     # The '-c' parameters is currently ignored
-    optParameters: list[str] = []
-    optFlags: list[list[str]] = [["help", "h", "Display this help and exit."]]
+    optParameters: ClassVar[list[str]] = []
+    optFlags: ClassVar[list[list[str]]] = [["help", "h", "Display this help and exit."]]
 
 
 @provider(ILogObserver)
@@ -88,11 +90,13 @@ class CowrieServiceMaker:
     tapname: ClassVar[str] = "cowrie"
     description: ClassVar[str] = "She sells sea shells by the sea shore."
     options = Options
-    output_plugins: list[Callable] = []
+    output_plugins: list[Callable]
     topService: service.Service
 
     def __init__(self) -> None:
         self.pool_handler = None
+
+        self.output_plugins = []
 
         # ssh is enabled by default
         self.enableSSH: bool = CowrieConfig.getboolean("ssh", "enabled", fallback=True)
@@ -113,7 +117,7 @@ class CowrieServiceMaker:
         """
 
         if options["help"] is True:
-            print(
+            print(  # noqa: T201
                 """Usage: twistd [options] cowrie [-h]
 Options:
   -h, --help             print this help message.
@@ -124,7 +128,7 @@ Makes a Cowrie SSH/Telnet honeypot.
             sys.exit(1)
 
         if os.name == "posix" and os.getuid() == 0:
-            print("ERROR: You must not run cowrie as root!")
+            print("ERROR: You must not run cowrie as root!")  # noqa: T201
             sys.exit(1)
 
         tz: str = CowrieConfig.get("honeypot", "timezone", fallback="UTC")
@@ -150,7 +154,7 @@ Makes a Cowrie SSH/Telnet honeypot.
 
         # check configurations
         if not self.enableTelnet and not self.enableSSH and not self.pool_only:
-            print(
+            print(  # noqa: T201
                 "ERROR: You must at least enable SSH or Telnet, or run the backend pool"
             )
             sys.exit(1)
@@ -252,7 +256,7 @@ Makes a Cowrie SSH/Telnet honeypot.
 
         if self.enableTelnet:
             f = cowrie.telnet.factory.HoneyPotTelnetFactory(backend, self.pool_handler)
-            f.tac = self  # type: ignore
+            f.tac = self
             f.portal = portal.Portal(core.realm.HoneyPotRealm())
             f.portal.registerChecker(core.checkers.HoneypotPasswordChecker())
 

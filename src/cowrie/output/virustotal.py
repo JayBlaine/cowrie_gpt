@@ -35,13 +35,13 @@ from __future__ import annotations
 import datetime
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import urlencode, urlparse
 
 from zope.interface import implementer
 
 from twisted.internet import defer
-from twisted.internet import reactor  # type: ignore
+from twisted.internet import reactor
 from twisted.internet.ssl import ClientContextFactory
 from twisted.python import log
 from twisted.web import client, http_headers
@@ -67,14 +67,14 @@ class Output(cowrie.core.output.Output):
     agent: Any
     scan_url: bool
     scan_file: bool
-    url_cache: dict[
-        str, datetime.datetime
-    ] = {}  # url and last time succesfully submitted
+    url_cache: dict[str, datetime.datetime]  # url and last time succesfully submitted
 
-    def start(self):
+    def start(self) -> None:
         """
         Start output plugin
         """
+        self.url_cache = {}
+
         self.apiKey = CowrieConfig.get("output_virustotal", "api_key")
         self.debug = CowrieConfig.getboolean(
             "output_virustotal", "debug", fallback=False
@@ -96,11 +96,10 @@ class Output(cowrie.core.output.Output):
         )
         self.agent = client.Agent(reactor, WebClientContextFactory())
 
-    def stop(self):
+    def stop(self) -> None:
         """
         Stop output plugin
         """
-        pass
 
     def write(self, entry: dict[str, Any]) -> None:
         if entry["eventid"] == "cowrie.session.file_download":
@@ -207,7 +206,7 @@ class Output(cowrie.core.output.Output):
             elif j["response_code"] == 1:
                 log.msg("VT: response=1: this has been scanned before")
                 # Add detailed report to json log
-                scans_summary: Dict[str, Dict[str, str]] = {}
+                scans_summary: dict[str, dict[str, str]] = {}
                 for feed, info in j["scans"].items():
                     feed_key = feed.lower()
                     scans_summary[feed_key] = {}
@@ -243,7 +242,7 @@ class Output(cowrie.core.output.Output):
         fields = {("apikey", self.apiKey)}
         files = {("file", fileName, open(artifact, "rb"))}
         if self.debug:
-            log.msg(f"submitting to VT: {repr(files)}")
+            log.msg(f"submitting to VT: {files!r}")
         contentType, body = encode_multipart_formdata(fields, files)
         producer = StringProducer(body)
         headers = http_headers.Headers(
@@ -373,7 +372,7 @@ class Output(cowrie.core.output.Output):
             elif j["response_code"] == 1 and "scans" in j:
                 log.msg("VT: response=1: this has been scanned before")
                 # Add detailed report to json log
-                scans_summary: Dict[str, Dict[str, str]] = {}
+                scans_summary: dict[str, dict[str, str]] = {}
                 for feed, info in j["scans"].items():
                     feed_key = feed.lower()
                     scans_summary[feed_key] = {}
@@ -482,12 +481,12 @@ def encode_multipart_formdata(fields, files):
     """
     BOUNDARY = b"----------ThIs_Is_tHe_bouNdaRY_$"
     L = []
-    for (key, value) in fields:
+    for key, value in fields:
         L.append(b"--" + BOUNDARY)
         L.append(b'Content-Disposition: form-data; name="%s"' % key.encode())
         L.append(b"")
         L.append(value.encode())
-    for (key, filename, value) in files:
+    for key, filename, value in files:
         L.append(b"--" + BOUNDARY)
         L.append(
             b'Content-Disposition: form-data; name="%s"; filename="%s"'

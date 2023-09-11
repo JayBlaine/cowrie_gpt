@@ -19,7 +19,8 @@ from twisted.cred.error import UnauthorizedLogin, UnhandledCredentials
 from twisted.internet import defer
 from twisted.python import failure, log
 
-from cowrie.core import auth, credentials
+from cowrie.core import auth
+from cowrie.core import credentials as conchcredentials
 from cowrie.core.config import CowrieConfig
 
 
@@ -51,7 +52,7 @@ class HoneypotNoneChecker:
     Checker that does no authentication check
     """
 
-    credentialInterfaces = (credentials.IUsername,)
+    credentialInterfaces = (conchcredentials.IUsername,)
 
     def requestAvatarId(self, credentials):
         return defer.succeed(credentials.username)
@@ -64,8 +65,8 @@ class HoneypotPasswordChecker:
     """
 
     credentialInterfaces = (
-        credentials.IUsernamePasswordIP,
-        credentials.IPluggableAuthenticationModulesIP,
+        conchcredentials.IUsernamePasswordIP,
+        conchcredentials.IPluggableAuthenticationModulesIP,
     )
 
     def requestAvatarId(self, credentials):
@@ -74,9 +75,8 @@ class HoneypotPasswordChecker:
                 credentials.username, credentials.password, credentials.ip
             ):
                 return defer.succeed(credentials.username)
-            else:
-                return defer.fail(UnauthorizedLogin())
-        elif hasattr(credentials, "pamConversion"):
+            return defer.fail(UnauthorizedLogin())
+        if hasattr(credentials, "pamConversion"):
             return self.checkPamUser(
                 credentials.username, credentials.pamConversion, credentials.ip
             )
@@ -87,12 +87,12 @@ class HoneypotPasswordChecker:
         return r.addCallback(self.cbCheckPamUser, username, ip)
 
     def cbCheckPamUser(self, responses, username, ip):
-        for (response, zero) in responses:
+        for response, _ in responses:
             if self.checkUserPass(username, response, ip):
                 return defer.succeed(username)
         return defer.fail(UnauthorizedLogin())
 
-    def checkUserPass(self, theusername, thepassword, ip):
+    def checkUserPass(self, theusername: bytes, thepassword: bytes, ip: str) -> bool:
         # UserDB is the default auth_class
         authname = auth.UserDB
 
@@ -117,11 +117,11 @@ class HoneypotPasswordChecker:
                 password=thepassword,
             )
             return True
-        else:
-            log.msg(
-                eventid="cowrie.login.failed",
-                format="login attempt [%(username)s/%(password)s] failed",
-                username=theusername,
-                password=thepassword,
-            )
-            return False
+
+        log.msg(
+            eventid="cowrie.login.failed",
+            format="login attempt [%(username)s/%(password)s] failed",
+            username=theusername,
+            password=thepassword,
+        )
+        return False

@@ -12,7 +12,8 @@ import re
 import shlex
 import stat
 import time
-from typing import Callable, Optional
+from typing import Optional
+from collections.abc import Callable
 
 from twisted.internet import error
 from twisted.python import failure, log
@@ -33,7 +34,7 @@ class HoneyPotCommand:
         self.args = list(args)
         self.environ = self.protocol.cmdstack[0].environ
         self.fs = self.protocol.fs
-        self.data: bytes = b''  # output data
+        self.data: bytes = b""  # output data
         self.input_data: Optional[
             bytes
         ] = None  # used to store STDIN data passed via PIPE
@@ -147,7 +148,7 @@ class HoneyPotCommand:
         self.exit()
 
     def call(self) -> None:
-        self.write(f"Hello World! [{repr(self.args)}]\n")
+        self.write(f"Hello World! [{self.args!r}]\n")
 
     def exit(self) -> None:
         """

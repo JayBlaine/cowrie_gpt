@@ -105,8 +105,8 @@ ttylog_path = ${honeypot:state_path}/tty
 interactive_timeout = 180
 
 # Authentication Timeout
-# The server disconnects after this time if the user has not successfully logged in.  If the value is 0,
-# there is no time limit.  The default is 120 seconds.
+# The server disconnects after this time if the user has not successfully logged in. 
+# The default is 120 seconds.
 authentication_timeout = 120
 
 # EXPERIMENTAL: back-end to user for Cowrie, options: proxy or shell
@@ -558,7 +558,7 @@ ciphers = aes128-ctr,aes192-ctr,aes256-ctr,aes256-cbc,aes192-cbc,aes128-cbc,3des
 # hmac-sha2-256
 # hmac-sha1
 # hmac-md5
-macs = hmac-sha2-512,hmac-sha2-384,hmac-sha2-56,hmac-sha1,hmac-md5
+macs = hmac-sha2-512,hmac-sha2-384,hmac-sha2-256,hmac-sha1,hmac-md5
 
 
 # Compression Method to be used.
@@ -1048,3 +1048,16 @@ bearer_token = THREATJAMMER_API_TOKEN
 [output_discord]
 enabled = false
 url = https://discord.com/api/webhooks/id/token
+
+# Datadog output module
+# sends JSON directly to Datadog
+# mandatory field: api_key
+# optional fields (fallback configured in module): ddsource, ddtags, service
+# For more information on fields https://docs.datadoghq.com/api/latest/logs/#send-logs
+[output_datadog]
+enabled = false
+url = https://http-intake.logs.datadoghq.com/api/v2/logs
+api_key = abcdef1234567890fedcba0987654321
+ddsource = cowrie
+ddtags = env:dev
+service = honeypot

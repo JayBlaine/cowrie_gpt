@@ -18,12 +18,12 @@ from cowrie.core.config import CowrieConfig
 
 
 class Output(cowrie.core.output.Output):
-    def start(self):
+    def start(self) -> None:
         self.url = CowrieConfig.get("output_graylog", "url").encode("utf8")
         contextFactory = WebClientContextFactory()
         self.agent = client.Agent(reactor, contextFactory)
 
-    def stop(self):
+    def stop(self) -> None:
         pass
 
     def write(self, logentry):
@@ -33,11 +33,11 @@ class Output(cowrie.core.output.Output):
                 del logentry[i]
 
         gelf_message = {
-            'version': '1.1',
-            'host': logentry["sensor"],
-            'timestamp': time.time(),
-            'short_message': json.dumps(logentry),
-            'level': 1,
+            "version": "1.1",
+            "host": logentry["sensor"],
+            "timestamp": time.time(),
+            "short_message": json.dumps(logentry),
+            "level": 1,
         }
 
         self.postentry(gelf_message)

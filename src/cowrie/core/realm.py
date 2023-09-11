@@ -44,13 +44,14 @@ class HoneyPotRealm:
     def __init__(self) -> None:
         pass
 
-    def requestAvatar(self, avatarId, mind, *interfaces):
+    def requestAvatar(self, avatarId, _mind, *interfaces):
         user: IConchUser
         if IConchUser in interfaces:
             serv = shellserver.CowrieServer(self)
             user = shellavatar.CowrieUser(avatarId, serv)
             return interfaces[0], user, user.logout
-        elif ITelnetProtocol in interfaces:
+        if ITelnetProtocol in interfaces:
             serv = shellserver.CowrieServer(self)
             user = session.HoneyPotTelnetSession(avatarId, serv)
             return interfaces[0], user, user.logout
+        raise NotImplementedError

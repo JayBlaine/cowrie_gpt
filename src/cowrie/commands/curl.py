@@ -302,7 +302,7 @@ class Command_curl(HoneyPotCommand):
         deferred = treq.get(url=url, allow_redirects=False, headers=headers, timeout=10)
         return deferred
 
-    def handle_CTRL_C(self):
+    def handle_CTRL_C(self) -> None:
         self.write("^C\n")
         self.exit()
 
@@ -374,14 +374,14 @@ class Command_curl(HoneyPotCommand):
 
         self.protocol.logDispatch(
             eventid="cowrie.session.file_download",
-            format="Downloaded URL (%(url)s) with SHA-256 %(shasum)s to %(filename)s",
+            format="Downloaded URL (%(url)s) with SHA-256 %(shasum)s to %(outfile)s",
             url=self.url.decode(),
             outfile=self.artifact.shasumFilename,
             shasum=self.artifact.shasum,
         )
         log.msg(
             eventid="cowrie.session.file_download",
-            format="Downloaded URL (%(url)s) with SHA-256 %(shasum)s to %(filename)s",
+            format="Downloaded URL (%(url)s) with SHA-256 %(shasum)s to %(outfile)s",
             url=self.url.decode(),
             outfile=self.artifact.shasumFilename,
             shasum=self.artifact.shasum,
@@ -401,7 +401,7 @@ class Command_curl(HoneyPotCommand):
         log.msg(
             eventid="cowrie.session.file_download.failed",
             format="Attempt to download file(s) from URL (%(url)s) failed",
-            url=self.url,
+            url=self.url.decode(),
         )
 
         if response.check(error.DNSLookupError) is not None:
@@ -410,12 +410,16 @@ class Command_curl(HoneyPotCommand):
             return
 
         elif response.check(error.ConnectingCancelledError) is not None:
-            self.write(f"curl: (7) Failed to connect to {self.host} port {self.port}: Operation timed out\n")
+            self.write(
+                f"curl: (7) Failed to connect to {self.host} port {self.port}: Operation timed out\n"
+            )
             self.exit()
             return
 
         elif response.check(error.ConnectionRefusedError) is not None:
-            self.write(f"curl: (7) Failed to connect to {self.host} port {self.port}: Connection refused\n")
+            self.write(
+                f"curl: (7) Failed to connect to {self.host} port {self.port}: Connection refused\n"
+            )
             self.exit()
             return
 

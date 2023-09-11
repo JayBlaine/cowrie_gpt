@@ -8,7 +8,7 @@ import copy
 import os
 import re
 import shlex
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from twisted.internet import error
 from twisted.python import failure, log
@@ -25,7 +25,7 @@ class HoneyPotShell:
         self.protocol = protocol
         self.interactive: bool = interactive
         self.redirect: bool = redirect  # to support output redirection
-        self.cmdpending: List[List[str]] = []
+        self.cmdpending: list[list[str]] = []
         self.environ: dict[str, str] = copy.copy(protocol.environ)
         if hasattr(protocol.user, "windowSize"):
             self.environ["COLUMNS"] = str(protocol.user.windowSize[1])
@@ -39,17 +39,19 @@ class HoneyPotShell:
         # Add these special characters that are not in the default lexer
         self.lexer.wordchars += "@%{}=$:+^,()`"
 
-        tokens: List[str] = []
+        tokens: list[str] = []
 
         while True:
             try:
-                tok: str = self.lexer.get_token()
+                tokkie: str | None = self.lexer.get_token()
                 # log.msg("tok: %s" % (repr(tok)))
 
-                if tok == self.lexer.eof:
+                if tokkie is None:  # self.lexer.eof put None for mypy
                     if tokens:
                         self.cmdpending.append(tokens)
                     break
+                else:
+                    tok: str = tokkie
 
                 # For now, treat && and || same as ;, just execute without checking return code
                 if tok == "&&" or tok == "||":
@@ -81,7 +83,7 @@ class HoneyPotShell:
                 elif "$(" in tok or "`" in tok:
                     tok = self.do_command_substitution(tok)
                 elif tok.startswith("${"):
-                    envRex = re.compile(r"^\$([_a-zA-Z0-9]+)$")
+                    envRex = re.compile(r"^\${([_a-zA-Z0-9]+)}$")
                     envSearch = envRex.search(tok)
                     if envSearch is not None:
                         envMatch = envSearch.group(1)
@@ -90,7 +92,7 @@ class HoneyPotShell:
                         else:
                             continue
                 elif tok.startswith("$"):
-                    envRex = re.compile(r"^\${([_a-zA-Z0-9]+)}$")
+                    envRex = re.compile(r"^\$([_a-zA-Z0-9]+)$")
                     envSearch = envRex.search(tok)
                     if envSearch is not None:
                         envMatch = envSearch.group(1)
@@ -164,15 +166,18 @@ class HoneyPotShell:
             else:
                 if opening_count > closing_count and pos == len(cmd_expr) - 1:
                     if self.lexer:
-                        tok = self.lexer.get_token()
-                        cmd_expr = cmd_expr + " " + tok
+                        tokkie = self.lexer.get_token()
+                        if tokkie is None:  # self.lexer.eof put None for mypy
+                            break
+                        else:
+                            cmd_expr = cmd_expr + " " + tokkie
                 elif opening_count == closing_count:
                     result += cmd_expr[pos]
                 pos += 1
 
         return result
 
-    def run_subshell_command(self, cmd_expr):
+    def run_subshell_command(self, cmd_expr: str) -> str:
         # extract the command from $(...) or `...` or (...) expression
         if cmd_expr.startswith("$("):
             cmd = cmd_expr[2:-1]
@@ -187,7 +192,11 @@ class HoneyPotShell:
         self.protocol.cmdstack[-1].lineReceived(cmd)
         # remove the shell
         res = self.protocol.cmdstack.pop()
-        return res.protocol.pp.redirected_data.decode()[:-1]
+        try:
+            output: str = res.protocol.pp.redirected_data.decode()[:-1]
+            return output
+        except AttributeError:
+            return ""
 
     def runCommand(self):
         pp = None
@@ -198,14 +207,14 @@ class HoneyPotShell:
             else:
                 self.showPrompt()
 
-        def parse_arguments(arguments: List[str]) -> List[str]:
+        def parse_arguments(arguments: list[str]) -> list[str]:
             parsed_arguments = []
             for arg in arguments:
                 parsed_arguments.append(arg)
 
             return parsed_arguments
 
-        def parse_file_arguments(arguments: str) -> List[str]:
+        def parse_file_arguments(arguments: str) -> list[str]:
             """
             Look up arguments in the file system
             """
@@ -242,7 +251,7 @@ class HoneyPotShell:
         # Probably no reason to be this comprehensive for just PATH...
         environ = copy.copy(self.environ)
         cmd_array = []
-        cmd: Dict[str, Any] = {}
+        cmd: dict[str, Any] = {}
         while cmdAndArgs:
             piece = cmdAndArgs.pop(0)
             if piece.count("="):
@@ -258,13 +267,13 @@ class HoneyPotShell:
             return
 
         pipe_indices = [i for i, x in enumerate(cmdAndArgs) if x == "|"]
-        multipleCmdArgs: List[List[str]] = []
+        multipleCmdArgs: list[list[str]] = []
         pipe_indices.append(len(cmdAndArgs))
         start = 0
 
         # Gather all arguments with pipes
 
-        for index, pipe_indice in enumerate(pipe_indices):
+        for _index, pipe_indice in enumerate(pipe_indices):
             multipleCmdArgs.append(cmdAndArgs[start:pipe_indice])
             start = pipe_indice + 1
 
@@ -274,7 +283,7 @@ class HoneyPotShell:
         cmd_array.append(cmd)
         cmd = {}
 
-        for index, value in enumerate(multipleCmdArgs):
+        for value in multipleCmdArgs:
             cmd["command"] = value.pop(0)
             cmd["rargs"] = parse_arguments(value)
             cmd_array.append(cmd)
@@ -282,7 +291,6 @@ class HoneyPotShell:
 
         lastpp = None
         for index, cmd in reversed(list(enumerate(cmd_array))):
-
             cmdclass = self.protocol.getCommand(
                 cmd["command"], environ["PATH"].split(":")
             )
@@ -424,7 +432,7 @@ class HoneyPotShell:
             return
 
         # Clear early so we can call showPrompt if needed
-        for i in range(self.protocol.lineBufferIndex):
+        for _i in range(self.protocol.lineBufferIndex):
             self.protocol.terminal.cursorBackward()
             self.protocol.terminal.deleteCharacter()
 
@@ -444,7 +452,7 @@ class HoneyPotShell:
             else:
                 prefix = ""
             first = line.decode("utf8").split(" ")[:-1]
-            newbuf = " ".join(first + [f"{basedir}{prefix}"])
+            newbuf = " ".join([*first, f"{basedir}{prefix}"])
             newbyt = newbuf.encode("utf8")
             if newbyt == b"".join(self.protocol.lineBuffer):
                 self.protocol.terminal.write(b"\n")
@@ -489,7 +497,6 @@ class StdOutStdErrEmulationProtocol:
         self.redirect = redirect  # dont send to terminal if enabled
 
     def connectionMade(self) -> None:
-
         self.input_data = b""
 
     def outReceived(self, data: bytes) -> None:
@@ -544,7 +551,7 @@ class StdOutStdErrEmulationProtocol:
         pass
 
     def processExited(self, reason):
-        log.msg("processExited for %s, status %d" % (self.cmd, reason.value.exitCode))
+        log.msg(f"processExited for {self.cmd}, status {reason.value.exitCode}")
 
     def processEnded(self, reason):
-        log.msg("processEnded for %s, status %d" % (self.cmd, reason.value.exitCode))
+        log.msg(f"processEnded for {self.cmd}, status {reason.value.exitCode}")

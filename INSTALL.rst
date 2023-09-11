@@ -26,7 +26,7 @@ Actual Python packages are installed later.
 
 On Debian based systems (last verified on Debian 10, 2021-04-29)::
 
-    $ sudo apt-get install git python-virtualenv libssl-dev libffi-dev build-essential libpython3-dev python3-minimal authbind virtualenv
+    $ sudo apt-get install git python3-virtualenv libssl-dev libffi-dev build-essential libpython3-dev python3-minimal authbind virtualenv
 
 Step 2: Create a user account
 *****************************
@@ -71,15 +71,15 @@ Next you need to create your virtual environment::
 
     $ pwd
     /home/cowrie/cowrie
-    $ virtualenv --python=python3 cowrie-env
+    $ python -m venv cowrie-env
     New python executable in ./cowrie/cowrie-env/bin/python
     Installing setuptools, pip, wheel...done.
 
 Activate the virtual environment and install packages::
 
     $ source cowrie-env/bin/activate
-    (cowrie-env) $ pip install --upgrade pip
-    (cowrie-env) $ pip install --upgrade -r requirements.txt
+    (cowrie-env) $ python -m pip install --upgrade pip
+    (cowrie-env) $ python -m pip install --upgrade -r requirements.txt
 
 Step 5: Install configuration file
 **********************************
@@ -165,7 +165,7 @@ Change the listening port to 23 in cowrie.cfg::
 Setcap
 ======
 
-Or use setcap to give permissions to Python to listen on ports<1024:: 
+Or use setcap to give permissions to Python to listen on ports<1024::
 
     $ setcap cap_net_bind_service=+ep /usr/bin/python3
 
@@ -183,7 +183,7 @@ and their Python interface. In Debian/Ubuntu::
 
 Then install the Python API to run the backend pool::
 
-    (cowrie-env) $ pip install libvirt-python==6.4.0
+    (cowrie-env) $ python -m pip install libvirt-python==6.4.0
 
 To allow QEMU to use disk images and snapshots, set it to run with the user and group of the user running the pool
 (usually called 'cowrie' too::
@@ -232,6 +232,20 @@ See ~/cowrie/docs/[Output Plugin]/README.rst for details.
 Troubleshooting
 ***************
 
+CryptographyDeprecationWarning: Blowfish has been deprecated
+============================================================
+
+The following warnings may occur, these can be safely ignored, and
+are not the reason your Cowrie installation is not working::
+
+    CryptographyDeprecationWarning: Blowfish has been deprecated b"blowfish-cbc": (algorithms.Blowfish, 16, modes.CBC),
+    CryptographyDeprecationWarning: CAST5 has been deprecated b"cast128-cbc": (algorithms.CAST5, 16, modes.CBC),
+    CryptographyDeprecationWarning: Blowfish has been deprecated b"blowfish-ctr": (algorithms.Blowfish, 16, modes.CTR),
+    CryptographyDeprecationWarning: CAST5 has been deprecated b"cast128-ctr": (algorithms.CAST5, 16, modes.CTR),
+
+The algorithms are used in Cowrie to support old attackers that use
+these deprecated algorithms.
+
 twistd: unknown command: cowrie
 ===============================
 
@@ -258,11 +272,11 @@ First stop your honeypot. Then pull updates from GitHub, and upgrade your Python
 
     $ bin/cowrie stop
     $ git pull
-    $ pip install --upgrade -r requirements.txt
+    $ python -m pip install --upgrade -r requirements.txt
 
 If you use output plugins like SQL, Splunk, or ELK, remember to also upgrade your dependencies for these too::
 
-    $ pip install --upgrade -r requirements-output.txt
+    $ python -m pip install --upgrade -r requirements-output.txt
 
 And finally, restart Cowrie after finishing all updates::
 
