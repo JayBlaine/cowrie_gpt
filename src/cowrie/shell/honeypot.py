@@ -10,18 +10,18 @@ import re
 import shlex
 from typing import Any, Optional
 
-from twisted.internet import error
+from twisted.internet import error, reactor
 from twisted.python import failure, log
 from twisted.python.compat import iterbytes
 
 from cowrie.core.config import CowrieConfig
 from cowrie.shell import fs
+from cowrie.llm.llm_fei import sendCmdLLM, LlmFEI
 
 
 class HoneyPotShell:
     def __init__(
-        self, protocol: Any, interactive: bool = True, redirect: bool = False
-    ) -> None:
+        self, protocol: Any, interactive: bool = True, redirect: bool = False) -> None:
         self.protocol = protocol
         self.interactive: bool = interactive
         self.redirect: bool = redirect  # to support output redirection
@@ -33,8 +33,17 @@ class HoneyPotShell:
         self.lexer: Optional[shlex.shlex] = None
         self.showPrompt()
 
+        self.llm_fei = LlmFEI()
+
     def lineReceived(self, line: str) -> None:
+        #return "test123"
+        # TODO: HERE FOR SURE LLM
+        #resp = sendCmdLLM(line).encode()
+        #self.protocol.terminal.write(resp)
+        #self.showPrompt()
         log.msg(eventid="cowrie.command.input", input=line, format="CMD: %(input)s")
+
+
         self.lexer = shlex.shlex(instream=line, punctuation_chars=True, posix=True)
         # Add these special characters that are not in the default lexer
         self.lexer.wordchars += "@%{}=$:+^,()`"
@@ -113,9 +122,38 @@ class HoneyPotShell:
                 return
 
         if self.cmdpending:
-            self.runCommand()
+            #TODO: " PASS TO LLM HERE?"
+            if CowrieConfig.has_option("honeypot", "use_llm") and \
+                    CowrieConfig.getboolean("honeypot", "use_llm") and \
+                    CowrieConfig.has_option("honeypot", "llm_key") and line:
+
+                resp, llm_err, llm_resp_time = self.llm_fei.handle_input(line, self.cmdpending)
+                log.msg(eventid="cowrie.command.input", input=str(llm_resp_time), format="CMD EXEC TIME: %(input)s")
+                self.protocol.terminal.write(resp.encode())
+
+                if llm_err == 1:  # if exit/logout command
+                    self.protocol.terminal.write(b'exit')
+                    log.msg(f"processExited for {line}, status 0")
+                    stat = failure.Failure(error.ProcessDone(status=""))
+                    self.protocol.terminal.transport.processEnded(stat)
+                    return
+                elif llm_err == 2:
+                    """
+                        if shutdown/reboot command, kill all sessions (cowrie), let wrap.sh reboot
+                    """
+                    self.protocol.terminal.write(b'Shutting down')
+                    log.msg(f"processExited for {line}, status 0")
+                    reactor.callLater(3, self.finish)  # type: ignore[attr-defined]
+                    return
+
+                self.showPrompt()
+            else:
+                self.runCommand()
         else:
             self.showPrompt()
+
+    def finish(self):
+        os.system("{} restart".format(CowrieConfig.get("honeypot", "cowrie_bin_path")))
 
     def do_command_substitution(self, start_tok: str) -> str:
         if start_tok[0] == "(":

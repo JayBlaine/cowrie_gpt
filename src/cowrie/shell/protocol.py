@@ -173,6 +173,7 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
             return self.txtcmd(txt)
 
         if path in self.commands:
+            # TODO: LLM PASSOFF HERE?
             return self.commands[path]
 
         log.msg(f"Can't find command {cmd}")
