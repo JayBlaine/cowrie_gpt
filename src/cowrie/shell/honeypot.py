@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import os
 import re
@@ -16,7 +17,7 @@ from twisted.python.compat import iterbytes
 
 from cowrie.core.config import CowrieConfig
 from cowrie.shell import fs
-from cowrie.llm.llm_fei import sendCmdLLM, LlmFEI
+from cowrie.llm.llm_fei import LlmFEI
 
 
 class HoneyPotShell:
@@ -33,14 +34,9 @@ class HoneyPotShell:
         self.lexer: Optional[shlex.shlex] = None
         self.showPrompt()
 
-        self.llm_fei = LlmFEI()
+        self.llm_fei = LlmFEI(username=self.protocol.user.username, home=self.protocol.cwd)
 
     def lineReceived(self, line: str) -> None:
-        #return "test123"
-        # TODO: HERE FOR SURE LLM
-        #resp = sendCmdLLM(line).encode()
-        #self.protocol.terminal.write(resp)
-        #self.showPrompt()
         log.msg(eventid="cowrie.command.input", input=line, format="CMD: %(input)s")
 
 
@@ -122,17 +118,16 @@ class HoneyPotShell:
                 return
 
         if self.cmdpending:
-            #TODO: " PASS TO LLM HERE?"
             if CowrieConfig.has_option("honeypot", "use_llm") and \
                     CowrieConfig.getboolean("honeypot", "use_llm") and \
                     CowrieConfig.has_option("honeypot", "llm_key") and line:
 
                 resp, llm_err, llm_resp_time = self.llm_fei.handle_input(line, self.cmdpending)
-                log.msg(eventid="cowrie.command.input", input=str(llm_resp_time), format="CMD EXEC TIME: %(input)s")
-                self.protocol.terminal.write(resp.encode())
+                log.msg(eventid="cowrie.command.input", input=str(llm_resp_time), format="LLM CMD EXEC TIME: %(input)s")
+                self.protocol.terminal.write(resp.lstrip('\n').encode())
 
                 if llm_err == 1:  # if exit/logout command
-                    self.protocol.terminal.write(b'exit')
+                    self.protocol.terminal.write(b'logout\n')
                     log.msg(f"processExited for {line}, status 0")
                     stat = failure.Failure(error.ProcessDone(status=""))
                     self.protocol.terminal.transport.processEnded(stat)
@@ -145,7 +140,8 @@ class HoneyPotShell:
                     log.msg(f"processExited for {line}, status 0")
                     reactor.callLater(3, self.finish)  # type: ignore[attr-defined]
                     return
-
+                self.cmdpending = []
+                self.protocol.cwd = self.llm_fei.cwd
                 self.showPrompt()
             else:
                 self.runCommand()
