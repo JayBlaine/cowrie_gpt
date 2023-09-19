@@ -27,8 +27,10 @@ def check_exec_list(cmd: list):
 
 class LlmFEI():
 
-    def __init__(self, username: str = "", home: str = ""):
+    def __init__(self, username: str = "", home: str = "", session_token_limit: int = 131072):
         self.TOKEN_LIMIT = 4096
+        self.SESSION_TOKENS = 0
+        self.SESSION_LIMIT = session_token_limit
         self.encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         self.key = CowrieConfig.get("honeypot", "llm_key", fallback="")
         # self.system_prompt = self.configure_sys_prompt()
@@ -104,6 +106,7 @@ class LlmFEI():
         :return:
         """
         self.system_prompt = self.configure_sys_prompt()  # updating to include changes in cwd
+        # TODO: HARD TOKEN LIMITS PER SESSION AND GENERAL USE
         # TODO: rework to only change the cwd rather than full rebuild
         ret_output = ""
         llm_exec_time = 0.0
@@ -118,10 +121,17 @@ class LlmFEI():
         for cmd in cmds:
             cmd_flat = ' '.join(cmd)
             exit_code = check_exec_list(cmd)
+            if self.SESSION_TOKENS > self.SESSION_LIMIT:  # check for number of tokens used so far in session
+                exit_code = 1
+
             if exit_code:
                 return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time
-            alt_switch = self.choose_history(cmd_flat)
-            messages = self.build_question(alt_switch, cmd_flat)
+
+            if CowrieConfig.getboolean('honeypot', 'extended_llm', fallback=True):
+                alt_switch = self.choose_history(cmd_flat)
+                messages = self.build_question(alt_switch, cmd_flat)
+            else:
+                messages = self.build_question(0, cmd_flat)
 
             st_time = time.time()
             output = self.get_llm_output(messages)
@@ -133,7 +143,7 @@ class LlmFEI():
 
             if 'No such file or directory' not in ret_output:
                 self.cwd = update_input_str(cmd_flat, self.cwd)
-            print(self.cwd)
+            #print(self.cwd)
 
         return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time
 
@@ -165,17 +175,23 @@ class LlmFEI():
         if alt_switch:
             # adding to system prompt to accommodate only using user messages
             messages.append({"role": "system", "content": self.system_prompt + "\nThe past inputs are provided."})
+            self.SESSION_TOKENS += len(self.encoding.encode(self.system_prompt))
             for cmd in self.input_history:
+                self.SESSION_TOKENS += len(self.encoding.encode(cmd))
                 messages.append({"role": "user", "content": cmd})
             # GLOBAL HISTORY
         else:
             messages.append({"role": "system", "content": self.system_prompt})
             for pair in self.context_history:
+                self.SESSION_TOKENS += len(self.encoding.encode(pair[0]))
                 messages.append({"role": "user", "content": pair[0]})
+                self.SESSION_TOKENS += len(self.encoding.encode(pair[1]))
                 messages.append({"role": "assistant", "content": pair[1]})
             # CONTEXT HISTORY
 
         messages.append({"role": "user", "content": input_cmd})
+        self.SESSION_TOKENS += len(self.encoding.encode(input_cmd))
+
         return messages
 
     def get_llm_output(self, messages):
@@ -193,6 +209,7 @@ class LlmFEI():
         )
 
         cmd_resp = response["choices"][0]["message"]["content"]
+        self.SESSION_TOKENS += len(self.encoding.encode(cmd_resp))
         return self.sanitize_output(cmd_resp)
 
     def updateContext(self, line: str, cmd: list, output: str):
@@ -204,16 +221,20 @@ class LlmFEI():
         :param cmds:
         :return:
         """
-        self.input_history.append(line)
-        flattened_input_hist = '\n'.join(self.input_history)
-        while len(self.encoding.encode(flattened_input_hist)) > self.TOKEN_LIMIT:
-            self.input_history = self.input_history[1:]
-            flattened_input_hist = '\n'.join(self.input_history)
 
-        for context_cmd in context_cmds:  # seeing if recent input is context-changing
-            if context_cmd in cmd[0]:
-                self.context_history.append([' '.join(cmd), output])
-                break
+        if CowrieConfig.getboolean('honeypot', 'extended_llm', fallback=True):
+            self.input_history.append(line)
+            flattened_input_hist = '\n'.join(self.input_history)
+            while len(self.encoding.encode(flattened_input_hist)) > self.TOKEN_LIMIT:
+                self.input_history = self.input_history[1:]
+                flattened_input_hist = '\n'.join(self.input_history)
+
+            for context_cmd in context_cmds:  # seeing if recent input is context-changing
+                if context_cmd in cmd[0]:
+                    self.context_history.append([' '.join(cmd), output])
+                    break
+        else:
+            self.context_history.append([line, output])
 
     def sanitize_output(self, output: str):
         """
