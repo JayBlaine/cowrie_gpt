@@ -7,8 +7,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import os
+import random
 import re
 import shlex
+import time
 from typing import Any, Optional
 
 from twisted.internet import error, reactor
@@ -122,8 +124,10 @@ class HoneyPotShell:
                     CowrieConfig.getboolean("honeypot", "use_llm") and \
                     CowrieConfig.has_option("honeypot", "llm_key") and line:
 
-                resp, llm_err, llm_resp_time = self.llm_fei.handle_input(line, self.cmdpending)
-                log.msg(eventid="cowrie.command.input", input=str(llm_resp_time), format="LLM CMD EXEC TIME: %(input)s")
+                resp, llm_err, llm_resp_time, tokens_used = self.llm_fei.handle_input(line, self.cmdpending)
+                log.msg(eventid="cowrie.command.input", input=str(llm_resp_time), format="LLM CMD EXEC TIME: %(input)s seconds")
+                log.msg(eventid="cowrie.command.input", input=str(tokens_used), format="LLM TOKEN USE: %(input)s")
+                log.msg(eventid="cowrie.command.input", input=str(resp), format="LLM OUTPUT: %(resp)s")
                 self.protocol.terminal.write(resp.lstrip('\n').encode())
 
                 if llm_err == 1:  # if exit/logout command
@@ -144,6 +148,10 @@ class HoneyPotShell:
                 self.protocol.cwd = self.llm_fei.cwd
                 self.showPrompt()
             else:
+                # DELAY HERE
+                t_wait = random.normalvariate(1.5, 1.0)
+                time.sleep(t_wait)
+
                 self.runCommand()
         else:
             self.showPrompt()

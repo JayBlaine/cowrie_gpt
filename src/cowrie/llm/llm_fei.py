@@ -1,6 +1,5 @@
 import re
 import time
-import asyncio
 import openai
 import tiktoken
 from cowrie.core.config import CowrieConfig
@@ -30,6 +29,7 @@ class LlmFEI():
     def __init__(self, username: str = "", home: str = "", session_token_limit: int = 131072):
         self.TOKEN_LIMIT = 4096
         self.SESSION_TOKENS = 0
+        self.global_switch = 0  # only add to global history once
         self.SESSION_LIMIT = session_token_limit
         self.encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         self.key = CowrieConfig.get("honeypot", "llm_key", fallback="")
@@ -111,6 +111,8 @@ class LlmFEI():
         ret_output = ""
         llm_exec_time = 0.0
         exit_code = 0
+
+        self.global_switch = 0  # most recent line been added to global history? (To prevent adding with each sub-cmd)
         # for cmd in cmds:
         #     if cmd[0] in net_cmds and wget or curl in cmd[0]
         #           extract IP/HTML
@@ -125,19 +127,20 @@ class LlmFEI():
                 exit_code = 1
 
             if exit_code:
-                return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time
+                return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time, self.SESSION_TOKENS
 
             if CowrieConfig.getboolean('honeypot', 'extended_llm', fallback=True):
                 alt_switch = self.choose_history(cmd_flat)
-                messages = self.build_question(alt_switch, cmd_flat)
-            else:
-                messages = self.build_question(0, cmd_flat)
+                messages = self.build_question(alt_switch, cmd_flat, line)
+            else:  # non-context switching LLM
+                alt_switch = self.choose_history(cmd_flat)
+                messages = self.build_question(alt_switch, cmd_flat, line)
 
             st_time = time.time()
             output = self.get_llm_output(messages)
             end_time = time.time()
 
-            self.updateContext(line, cmd, output)
+            self.updateContext(line, cmd, output)  # extended will choose what gets appended, regular appends all
             llm_exec_time += (end_time - st_time)
             ret_output += output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n'
 
@@ -145,7 +148,7 @@ class LlmFEI():
                 self.cwd = update_input_str(cmd_flat, self.cwd)
             #print(self.cwd)
 
-        return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time
+        return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time, self.SESSION_TOKENS
 
     def choose_history(self, cmd: str):
         """
@@ -164,7 +167,7 @@ class LlmFEI():
         return 0
         # Check token length of context history
 
-    def build_question(self, alt_switch, input_cmd: str):
+    def build_question(self, alt_switch, input_cmd: str, line: str):
         """
         Combines sysprompt, history, question to send to LLM
         :param alt_switch: 0 = input history, 1 = context history
@@ -179,9 +182,12 @@ class LlmFEI():
             for cmd in self.input_history:
                 self.SESSION_TOKENS += len(self.encoding.encode(cmd))
                 messages.append({"role": "user", "content": cmd})
+            messages.append({"role": "user", "content": line})  # needs whole line as final question for history
+            self.SESSION_TOKENS += len(self.encoding.encode(line))
             # GLOBAL HISTORY
         else:
             messages.append({"role": "system", "content": self.system_prompt})
+            self.SESSION_TOKENS += len(self.encoding.encode(self.system_prompt))
             for pair in self.context_history:
                 self.SESSION_TOKENS += len(self.encoding.encode(pair[0]))
                 messages.append({"role": "user", "content": pair[0]})
@@ -189,8 +195,8 @@ class LlmFEI():
                 messages.append({"role": "assistant", "content": pair[1]})
             # CONTEXT HISTORY
 
-        messages.append({"role": "user", "content": input_cmd})
-        self.SESSION_TOKENS += len(self.encoding.encode(input_cmd))
+            messages.append({"role": "user", "content": input_cmd})
+            self.SESSION_TOKENS += len(self.encoding.encode(input_cmd))
 
         return messages
 
@@ -223,7 +229,9 @@ class LlmFEI():
         """
 
         if CowrieConfig.getboolean('honeypot', 'extended_llm', fallback=True):
-            self.input_history.append(line)
+            if self.global_switch == 0:
+                self.input_history.append(line)
+                self.global_switch = 1
             flattened_input_hist = '\n'.join(self.input_history)
             while len(self.encoding.encode(flattened_input_hist)) > self.TOKEN_LIMIT:
                 self.input_history = self.input_history[1:]
@@ -234,6 +242,9 @@ class LlmFEI():
                     self.context_history.append([' '.join(cmd), output])
                     break
         else:
+            if self.global_switch == 0:
+                self.input_history.append(line)
+                self.global_switch = 1
             self.context_history.append([line, output])
 
     def sanitize_output(self, output: str):
