@@ -34,13 +34,15 @@ class HoneypotPublicKeyChecker:
 
     def requestAvatarId(self, credentials):
         _pubKey = keys.Key.fromString(credentials.blob)
+        backend = CowrieConfig.get("honeypot", "shell_ext", fallback='basic')
         log.msg(
             eventid="cowrie.client.fingerprint",
-            format="public key attempt for user %(username)s of type %(type)s with fingerprint %(fingerprint)s",
+            format="BACKEND: %(backend)s public key attempt for user %(username)s of type %(type)s with fingerprint %(fingerprint)s",
             username=credentials.username,
             fingerprint=_pubKey.fingerprint(),
             key=_pubKey.toString("OPENSSH"),
             type=_pubKey.sshType(),
+            backend=backend
         )
 
         return failure.Failure(error.ConchError("Incorrect signature"))
@@ -108,11 +110,13 @@ class HoneypotPasswordChecker:
                 log.msg(f"auth_class: {authclass} not found in {authmodule}")
 
         theauth = authname()
+        backend = CowrieConfig.get("honeypot", "shell_ext", fallback='basic')
 
         if theauth.checklogin(theusername, thepassword, ip):
             log.msg(
                 eventid="cowrie.login.success",
-                format="login attempt [%(username)s/%(password)s] succeeded",
+                format="BACKEND: %(backend)s login attempt [%(username)s/%(password)s] succeeded",
+                backend=backend,
                 username=theusername,
                 password=thepassword,
             )
@@ -120,7 +124,8 @@ class HoneypotPasswordChecker:
 
         log.msg(
             eventid="cowrie.login.failed",
-            format="login attempt [%(username)s/%(password)s] failed",
+            format="BACKEND: %(backend)s login attempt [%(username)s/%(password)s] failed",
+            backend=backend,
             username=theusername,
             password=thepassword,
         )

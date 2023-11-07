@@ -70,10 +70,13 @@ class CowrieTelnetTransport(TelnetTransport, TimeoutMixin):
         self.setTimeout(None)
         TelnetTransport.connectionLost(self, reason)
         duration = time.time() - self.startTime
+
+        backend = CowrieConfig.get("honeypot", "shell_ext", fallback=False)
+
         log.msg(
             eventid="cowrie.session.closed",
-            format="Connection lost after %(duration)d seconds",
-            duration=duration,
+            format="BACKEND: %(backend)s Connection lost after %(duration)d seconds",
+            backend=backend, duration=duration,
         )
 
     def willChain(self, option):

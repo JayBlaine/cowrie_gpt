@@ -53,7 +53,10 @@ class CowrieUser(avatar.ConchUser):
             ] = forwarding.cowrieOpenConnectForwardingClient
 
     def logout(self) -> None:
-        log.msg(f"avatar {self.username} logging out")
+
+        backend = CowrieConfig.get("honeypot", "shell_ext", fallback=False)
+        log.msg(f"BACKEND: {backend} avatar {self.username} logging out")
+
 
     def lookupChannel(self, channelType, windowSize, maxPacket, data):
         """

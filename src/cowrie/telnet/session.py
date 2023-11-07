@@ -20,6 +20,8 @@ from cowrie.insults import insults
 from cowrie.shell import protocol as cproto
 from cowrie.shell import pwd
 
+from src.cowrie.core.config import CowrieConfig
+
 
 class HoneyPotTelnetSession(TelnetBootstrapProtocol):
     id = 0  # telnet can only have 1 simultaneous session, unlike SSH
@@ -90,7 +92,9 @@ class HoneyPotTelnetSession(TelnetBootstrapProtocol):
         self.protocol = None
 
     def logout(self):
-        log.msg(f"avatar {self.username} logging out")
+        backend = CowrieConfig.get("honeypot", "shell_ext", fallback=False)
+        log.msg(f"BACKEND: {backend} avatar {self.username} logging out")
+
 
 
 # Taken and adapted from

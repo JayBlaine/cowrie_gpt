@@ -129,7 +129,7 @@ class LlmFEI():
             if exit_code:
                 return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time, self.SESSION_TOKENS
 
-            if CowrieConfig.getboolean('honeypot', 'extended_llm', fallback=True):
+            if CowrieConfig.get('honeypot', 'shell_ext', fallback='llmv2') == 'llmv2':
                 alt_switch = self.choose_history(cmd_flat)
                 messages = self.build_question(alt_switch, cmd_flat, line)
             else:  # non-context switching LLM
@@ -228,8 +228,8 @@ class LlmFEI():
         :return:
         """
 
-        if CowrieConfig.getboolean('honeypot', 'extended_llm', fallback=True):
-            if self.global_switch == 0:
+        if CowrieConfig.get('honeypot', 'shell_ext', fallback='llmv2') == 'llmv2':
+            if self.global_switch == 0:  # input history not added yet
                 self.input_history.append(line)
                 self.global_switch = 1
             flattened_input_hist = '\n'.join(self.input_history)

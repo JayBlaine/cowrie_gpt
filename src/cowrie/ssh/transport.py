@@ -119,7 +119,8 @@ class HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin):
                 version=self.otherVersionString.decode(
                     "utf-8", errors="backslashreplace"
                 ),
-                format="Remote SSH version: %(version)s",
+                backend=CowrieConfig.get("honeypot", "shell_ext", fallback='basic'),
+                format="BACKEND: %(backend)s Remote SSH version: %(version)s",
             )
             m = re.match(rb"SSH-(\d+.\d+)-(.*)", self.otherVersionString)
             if m is None:
@@ -198,7 +199,8 @@ class HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin):
 
         log.msg(
             eventid="cowrie.client.kex",
-            format="SSH client hassh fingerprint: %(hassh)s",
+            format="BACKEND: %(backend)s SSH client hassh fingerprint: %(hassh)s",
+            backend=CowrieConfig.get("honeypot", "shell_ext", fallback='basic'),
             hassh=hassh,
             hasshAlgorithms=hasshAlgorithms,
             kexAlgs=kexAlgs,
@@ -246,10 +248,13 @@ class HoneyPotSSHTransport(transport.SSHServerTransport, TimeoutMixin):
         self.transport.connectionLost(reason)
         self.transport = None
         duration = time.time() - self.startTime
+
+        backend = CowrieConfig.get("honeypot", "shell_ext", fallback=False)
+
         log.msg(
-            eventid="cowrie.session.closed",
-            format="Connection lost after %(duration)d seconds",
-            duration=duration,
+        eventid="cowrie.session.closed",
+        format="BACKEND: %(backend)s Connection lost after %(duration)d seconds",
+        backend=backend, duration=duration,
         )
 
     def sendDisconnect(self, reason, desc):

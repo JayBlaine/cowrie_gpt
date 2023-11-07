@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import copy
 import os
 import random
@@ -36,10 +37,36 @@ class HoneyPotShell:
         self.lexer: Optional[shlex.shlex] = None
         self.showPrompt()
 
+        self.input_id_ctr = 0
         self.llm_fei = LlmFEI(username=self.protocol.user.username, home=self.protocol.cwd)
+        self.backend = CowrieConfig.get("honeypot", "shell_ext", fallback=False)
+        self.session_start_time = time.time()
+        self.last_action_time = self.session_start_time  # updated with exec time to see wait vs exec time
+        self.last_input_time = self.session_start_time  # updated with input recv time to see IAT
+        try:
+            log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(self.session_start_time),
+                    backend=self.backend, input1=str(self.environ['LINES']), input2=str(self.environ['COLUMNS']),
+                    format="<del>BACKEND: %(backend)s INPUT_ID:%(id)s TIME:%(time1)s TERM_SIZE:%(input2)sx%(input1)s<del>")
+        except builtins.KeyError:
+            log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(self.session_start_time),
+                    backend=self.backend,
+                    format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s TERM_SIZE: 0x0<del>")
 
     def lineReceived(self, line: str) -> None:
-        log.msg(eventid="cowrie.command.input", input=line, format="CMD: %(input)s")
+        self.input_id_ctr += 1
+        pre_exec_time = time.time()
+
+        # input content
+        log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(pre_exec_time), backend=self.backend, input=line,
+                format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s INPUT_CMD: %(input)s<del>")
+        # wait time
+        wait_time = pre_exec_time - self.last_action_time
+        iat_time = pre_exec_time - self.last_input_time
+        self.last_input_time = pre_exec_time
+        log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(pre_exec_time),backend=self.backend, input=wait_time,
+                format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_WAIT_TIME: %(input)s<del>")
+        log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(pre_exec_time),backend=self.backend, input=iat_time,
+                format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_IAT_TIME: %(input)s<del>")
 
 
         self.lexer = shlex.shlex(instream=line, punctuation_chars=True, posix=True)
@@ -120,18 +147,26 @@ class HoneyPotShell:
                 return
 
         if self.cmdpending:
-            if CowrieConfig.has_option("honeypot", "use_llm") and \
-                    CowrieConfig.getboolean("honeypot", "use_llm") and \
-                    CowrieConfig.has_option("honeypot", "llm_key") and line:
+            if 'llm' in CowrieConfig.get("honeypot", "shell_ext") and CowrieConfig.has_option("honeypot", "llm_key") and line:
 
                 resp, llm_err, llm_resp_time, tokens_used = self.llm_fei.handle_input(line, self.cmdpending)
-                log.msg(eventid="cowrie.command.input", input=str(llm_resp_time), format="LLM CMD EXEC TIME: %(input)s seconds")
-                log.msg(eventid="cowrie.command.input", input=str(tokens_used), format="LLM TOKEN USE: %(input)s")
-                log.msg(eventid="cowrie.command.input", input=str(resp), format="LLM OUTPUT: %(resp)s")
+                post_exec_time = time.time()
+                self.last_action_time = post_exec_time
+
+                if not llm_err:
+                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend, input=str(llm_resp_time),
+                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: %(input)s seconds<del>")
+                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,  input=str(tokens_used),
+                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s TOKEN_USE: %(input)s<del>")
+                #log.msg(eventid="cowrie.command.input", input=str(resp), format="LLM OUTPUT: %(resp)s")
                 self.protocol.terminal.write(resp.lstrip('\n').encode())
 
                 if llm_err == 1:  # if exit/logout command
                     self.protocol.terminal.write(b'logout\n')
+                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
+                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: 0 seconds<del>")
+                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend, input=str(tokens_used),
+                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s TOKEN_USE: 0<del>")
                     log.msg(f"processExited for {line}, status 0")
                     stat = failure.Failure(error.ProcessDone(status=""))
                     self.protocol.terminal.transport.processEnded(stat)
@@ -141,6 +176,10 @@ class HoneyPotShell:
                         if shutdown/reboot command, kill all sessions (cowrie), let wrap.sh reboot
                     """
                     self.protocol.terminal.write(b'Shutting down')
+                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
+                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: 0 seconds<del>")
+                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
+                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_TOKEN_USE: 0<del>")
                     log.msg(f"processExited for {line}, status 0")
                     reactor.callLater(3, self.finish)  # type: ignore[attr-defined]
                     return
@@ -149,8 +188,19 @@ class HoneyPotShell:
                 self.showPrompt()
             else:
                 # DELAY HERE
-                t_wait = random.normalvariate(1.5, 1.0)
-                time.sleep(t_wait)
+                if 'delay' in self.backend:
+                    mu = float(CowrieConfig.get('honeypot', 'delay_med'))
+                    sig = float(CowrieConfig.get('honeypot', 'delay_std'))
+                    t_wait = abs(random.normalvariate(mu, sig))
+                    time.sleep(t_wait)
+                else:
+                    t_wait = 0.0
+                post_exec_time = time.time()
+                self.last_action_time = post_exec_time
+                log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time),backend=self.backend, input=str(t_wait),
+                        format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: %(input)s seconds<del>")
+                log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time),backend=self.backend,
+                        format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_TOKEN_USE: 0<del>")
 
                 self.runCommand()
         else:
