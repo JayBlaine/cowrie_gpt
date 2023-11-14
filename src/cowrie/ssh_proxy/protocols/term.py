@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import os
+import random
 import time
 
 from twisted.python import log
@@ -120,6 +121,10 @@ class Term(base_protocol.BaseProtocol):
 
                     try:
                         if self.command != b"":
+                            mu = float(CowrieConfig.get('honeypot', 'delay_med'))
+                            sig = float(CowrieConfig.get('honeypot', 'delay_std'))
+                            t_wait = abs(random.normalvariate(mu, sig))
+                            time.sleep(t_wait)
                             log.msg(
                                 eventid="cowrie.command.input",
                                 input=self.command.decode("utf8"),
