@@ -176,7 +176,7 @@ Usage: awk [POSIX or GNU style options] [--] 'program' file ...
 POSIX options:          GNU long options: (standard)
         -f progfile             --file=progfile
         -F fs                   --field-separator=fs
-        -v var=val              --assign=var=val
+        -v var=ratio              --assign=var=ratio
 Short options:          GNU long options: (extensions)
         -b                      --characters-as-bytes
         -c                      --traditional
