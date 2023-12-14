@@ -213,7 +213,8 @@ class LlmFEI():
                 top_p=1,
                 frequency_penalty=0,
                 presence_penalty=0.0,
-                request_timeout=120
+                request_timeout=120,
+                max_tokens=1000
             )
             cmd_resp = response["choices"][0]["message"]["content"]
         except openai.error.Timeout:
