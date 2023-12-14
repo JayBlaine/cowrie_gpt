@@ -161,7 +161,7 @@ class HoneyPotShell:
                 #log.msg(eventid="cowrie.command.input", input=str(resp), format="LLM OUTPUT: %(resp)s")
                 self.protocol.terminal.write(resp.lstrip('\n').encode())
 
-                if llm_err == 1:  # if exit/logout command
+                if llm_err == 1 or llm_err == 2:  # if exit/logout command  # TEMP CHANGE FOR HONEYEVAL
                     self.protocol.terminal.write(b'logout\n')
                     log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
                             format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: 0 seconds<del>")
@@ -171,18 +171,18 @@ class HoneyPotShell:
                     stat = failure.Failure(error.ProcessDone(status=""))
                     self.protocol.terminal.transport.processEnded(stat)
                     return
-                elif llm_err == 2:
-                    """
-                        if shutdown/reboot command, kill all sessions (cowrie), let wrap.sh reboot
-                    """
-                    self.protocol.terminal.write(b'Shutting down')
-                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
-                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: 0 seconds<del>")
-                    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
-                            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_TOKEN_USE: 0<del>")
-                    log.msg(f"processExited for {line}, status 0")
-                    reactor.callLater(3, self.finish)  # type: ignore[attr-defined]
-                    return
+                #elif llm_err == 2:
+                #    """
+                #        if shutdown/reboot command, kill all sessions (cowrie), let wrap.sh reboot
+                #    """
+                #    self.protocol.terminal.write(b'Shutting down')
+                #    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
+                #            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_EXEC_TIME: 0 seconds<del>")
+                #    log.msg(eventid="cowrie.command.input", id=str(self.input_id_ctr), time1=str(post_exec_time), backend=self.backend,
+                #            format="<del>BACKEND: %(backend)s INPUT_ID: %(id)s TIME: %(time1)s CMD_TOKEN_USE: 0<del>")
+                #    log.msg(f"processExited for {line}, status 0")
+                #    reactor.callLater(3, self.finish)  # type: ignore[attr-defined]
+                #    return
                 self.cmdpending = []
                 self.protocol.cwd = self.llm_fei.cwd
                 self.showPrompt()
