@@ -201,7 +201,7 @@ class SFTP(base_protocol.BaseProtocol):
 
         elif packet == "SSH_FXP_EXTENDED_REPLY":
             log.msg(parent + "[SFTP] Entered Command: " + self.command.decode())
-            # self.out.command_entered(self.uuid, self.command)
+            # self.out.command_entered(self.uuid, self.command.txt)
 
         elif packet == "SSH_FXP_CLOSE":
             if self.handle == self.extract_string():

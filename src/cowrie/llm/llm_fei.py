@@ -1,3 +1,4 @@
+import json
 import re
 import time
 import openai
@@ -30,6 +31,12 @@ class LlmFEI():
         self.TOKEN_LIMIT = 4096
         self.SESSION_TOKENS = 0
         self.global_switch = 0  # only add to global history once
+
+        self.llm_version = CowrieConfig.get("honeypot", "shell_ext", fallback="llmv1")
+        self.depenency_chains = {}
+        if self.llm_version == 'llmv3':
+            self.depenency_chains = json.load(open(CowrieConfig.get("honeypot", "dependency_file")))
+
         self.SESSION_LIMIT = session_token_limit
         self.encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
         self.key = CowrieConfig.get("honeypot", "llm_key", fallback="")
@@ -83,9 +90,9 @@ class LlmFEI():
                   "operating system: {}\n"
                   "enabled services: {}\n"
                   "SSH version: {}\n\n"
-                  "When given a command, respond with the output of that command. Send only the command output. "
+                  "When given a command.txt, respond with the output of that command.txt. Send only the command.txt output. "
                   "Do not send any additional notes or comments under any circumstance. "
-                  "Send nil if that command has no output.".format(
+                  "Send nil if that command.txt has no output.".format(
             self.username, self.home, self.cwd, self.hostname, self.addr, self.arch, self.kernel_version,
             self.kernel_build_string, self.kernel_hardware_platform, self.kernel_os, enabled_services, self.ssh_version
         ))
@@ -112,35 +119,21 @@ class LlmFEI():
         llm_exec_time = 0.0
         exit_code = 0
 
-        self.global_switch = 0  # most recent line been added to global history? (To prevent adding with each sub-cmd)
-        # for cmd in cmds:
-        #     if cmd[0] in net_cmds and wget or curl in cmd[0]
-        #           extract IP/HTML
-        # TODO: COMM CHECK + EXTRACT URL/IP FOR EXTENDED FEI HERE BEFORE PASSING AND FLATTENING
-        # cmd_flat = self.flatten(cmds)  (NOT NEEDED, already in 2d list (outer + innter being cmds + switches)
-        # i.e. [[wget, www.google.com], [ping, 8.8.8.8], [ls, -la]
-
         for cmd in cmds:
-            cmd_flat = ' '.join(cmd)
             exit_code = check_exec_list(cmd)
             if self.SESSION_TOKENS > self.SESSION_LIMIT:  # check for number of tokens used so far in session
                 exit_code = 1
 
-            if exit_code:
+            if exit_code:  # max tokens reached, terminate session
                 return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time, self.SESSION_TOKENS
 
-            if CowrieConfig.get('honeypot', 'shell_ext', fallback='llmv2') == 'llmv2':
-                alt_switch = self.choose_history(cmd_flat)
-                messages = self.build_question(alt_switch, cmd_flat, line)
-            else:  # non-context switching LLM
-                alt_switch = self.choose_history(cmd_flat)
-                messages = self.build_question(alt_switch, cmd_flat, line)
-
+            cmd_flat = ' '.join(cmd)
+            messages = self.get_context(cmd_flat)
             st_time = time.time()
             output = self.get_llm_output(messages)
             end_time = time.time()
 
-            self.updateContext(line, cmd, output)  # extended will choose what gets appended, regular appends all
+            self.upkeep_context(cmd, output)  # extended will choose what gets appended, regular & depend appends all
             llm_exec_time += (end_time - st_time)
             ret_output += output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n'
 
@@ -150,53 +143,95 @@ class LlmFEI():
 
         return ret_output.rstrip('\n').rstrip('nil').rstrip('\n') + '\n', exit_code, llm_exec_time, self.SESSION_TOKENS
 
-    def choose_history(self, cmd: str):
+    def get_context(self, cmd):
+        if self.llm_version == 'llmv3':
+            return self.v3_choose_history(cmd)
+        elif self.llm_version == 'llmv2':
+            return self.v2_choose_history(cmd)
+        return self.v1_choose_history(cmd)
+
+    def v1_choose_history(self, cmd):
+        messages = []
+        messages.append({"role": "system", "content": self.system_prompt})
+        self.SESSION_TOKENS += len(self.encoding.encode(self.system_prompt))
+        for pair in self.context_history:
+            self.SESSION_TOKENS += len(self.encoding.encode(pair[0]))
+            messages.append({"role": "user", "content": pair[0]})
+            #self.SESSION_TOKENS += len(self.encoding.encode(pair[1]))
+            #messages.append({"role": "assistant", "content": pair[1]})
+        # CONTEXT HISTORY
+
+        messages.append({"role": "user", "content": cmd})
+        self.SESSION_TOKENS += len(self.encoding.encode(cmd))
+        return messages
+
+    def v2_choose_history(self, cmd: str):
         """
         Called by handle_input, choses input history or global history
         :return: 1 for global input history, 0 for context history
         """
-
+        messages = []
         for hist_cmd in alt_context_cmds:
             if hist_cmd in cmd:
-                return 1
+                messages.append({"role": "system", "content": self.system_prompt + "\nThe past inputs are provided."})
+                messages.extend([{"role": "user", "content": i} for i in self.input_history])
+                self.SESSION_TOKENS += sum(len(self.encoding.encode(i)) for i in self.input_history)
+                messages.append({"role": "user", "content": cmd})
+                self.SESSION_TOKENS += len(self.encoding.encode(cmd))
+                return messages
 
         flattened_context_hist = '\n'.join(self.flatten(self.context_history))
-        if len(self.encoding.encode(flattened_context_hist)) > (self.TOKEN_LIMIT - 256):
-            return 1
 
-        return 0
+        if len(self.encoding.encode(flattened_context_hist)) > (self.TOKEN_LIMIT - 256):
+            messages.append({"role": "system", "content": self.system_prompt + "\nThe past inputs are provided."})
+            messages.extend([{"role": "user", "content": i} for i in self.input_history])
+            self.SESSION_TOKENS += sum(len(self.encoding.encode(i)) for i in self.input_history)
+            messages.append({"role": "user", "content": cmd})
+            self.SESSION_TOKENS += len(self.encoding.encode(cmd))
+            return messages
+
+        messages.append({"role": "system", "content": self.system_prompt})
+        self.SESSION_TOKENS += len(self.encoding.encode(self.system_prompt))
+        for pair in self.context_history:
+            self.SESSION_TOKENS += len(self.encoding.encode(pair[0]))
+            messages.append({"role": "user", "content": pair[0]})
+            #self.SESSION_TOKENS += len(self.encoding.encode(pair[1]))
+            #messages.append({"role": "assistant", "content": pair[1]})
+        # CONTEXT HISTORY
+
+        messages.append({"role": "user", "content": cmd})
+        self.SESSION_TOKENS += len(self.encoding.encode(cmd))
+
+        return messages
         # Check token length of context history
 
-    def build_question(self, alt_switch, input_cmd: str, line: str):
-        """
-        Combines sysprompt, history, question to send to LLM
-        :param alt_switch: 0 = input history, 1 = context history
-        :return: messages (QA pairs or A with sys prompt)
-        """
+    def v3_choose_history(self, cmd: str):
         messages = []
-
-        if alt_switch:
-            # adding to system prompt to accommodate only using user messages
-            messages.append({"role": "system", "content": self.system_prompt + "\nThe past inputs are provided."})
-            self.SESSION_TOKENS += len(self.encoding.encode(self.system_prompt))
-            for cmd in self.input_history:
-                self.SESSION_TOKENS += len(self.encoding.encode(cmd))
-                messages.append({"role": "user", "content": cmd})
-            messages.append({"role": "user", "content": line})  # needs whole line as final question for history
-            self.SESSION_TOKENS += len(self.encoding.encode(line))
-            # GLOBAL HISTORY
-        else:
-            messages.append({"role": "system", "content": self.system_prompt})
-            self.SESSION_TOKENS += len(self.encoding.encode(self.system_prompt))
-            for pair in self.context_history:
-                self.SESSION_TOKENS += len(self.encoding.encode(pair[0]))
+        messages.append({"role": "system", "content": self.system_prompt})
+        tmp_tokens = 0
+        tmp_tokens += len(self.encoding.encode(self.system_prompt))
+        for pair in self.context_history:
+            try:
+                if pair[0].split(' ')[0] in self.depenency_chains[cmd.split(' ')[0]]:
+                    tmp_tokens += len(self.encoding.encode(pair[0]))
+                    messages.append({"role": "user", "content": pair[0]})
+                    #tmp_tokens += len(self.encoding.encode(pair[1]))
+                    #messages.append({"role": "assistant", "content": pair[1]})
+            except KeyError:  # command not in dependency. No data. Append just in case
+                tmp_tokens += len(self.encoding.encode(pair[0]))
                 messages.append({"role": "user", "content": pair[0]})
-                self.SESSION_TOKENS += len(self.encoding.encode(pair[1]))
-                messages.append({"role": "assistant", "content": pair[1]})
-            # CONTEXT HISTORY
+                #tmp_tokens += len(self.encoding.encode(pair[1]))
+                #messages.append({"role": "assistant", "content": pair[1]})
 
-            messages.append({"role": "user", "content": input_cmd})
-            self.SESSION_TOKENS += len(self.encoding.encode(input_cmd))
+        messages.append({"role": "user", "content": cmd})
+        tmp_tokens += len(self.encoding.encode(cmd))
+
+        while tmp_tokens + self.SESSION_TOKENS > self.TOKEN_LIMIT:
+            # 0 is system prompt, starting at 1
+            pop_cmd = messages.pop(1)['content']
+            #pop_output = messages.pop(1)['content']
+            tmp_tokens -= len(self.encoding.encode(pop_cmd ))
+        self.SESSION_TOKENS += tmp_tokens
 
         return messages
 
@@ -223,7 +258,19 @@ class LlmFEI():
         self.SESSION_TOKENS += len(self.encoding.encode(cmd_resp))
         return self.sanitize_output(cmd_resp)
 
-    def updateContext(self, line: str, cmd: list, output: str):
+    def upkeep_context(self, cmd:list, output:str):
+        p=1
+        if self.llm_version == 'llmv3':
+            self.v3_updateContext(cmd, output)
+        elif self.llm_version == 'llmv2':
+            self.v2_updateContext(cmd, output)
+        else:
+            self.v1_updateContext(cmd, output)
+
+    def v1_updateContext(self, cmd: list, output: str):
+        self.context_history.append([' '.join(cmd), output])
+
+    def v2_updateContext(self, cmd: list, output: str):
         """
         Updates histories using line for input history and cmd list for context history
         :param cmd:
@@ -232,25 +279,19 @@ class LlmFEI():
         :param cmds:
         :return:
         """
-
-        if CowrieConfig.get('honeypot', 'shell_ext', fallback='llmv2') == 'llmv2':
-            if self.global_switch == 0:  # input history not added yet
-                self.input_history.append(line)
-                self.global_switch = 1
+        self.input_history.append(' '.join(cmd))
+        flattened_input_hist = '\n'.join(self.input_history)
+        while len(self.encoding.encode(flattened_input_hist)) > self.TOKEN_LIMIT:  # GET INPUT HISTORY BELOW TOKEN LIMIT
+            self.input_history = self.input_history[1:]
             flattened_input_hist = '\n'.join(self.input_history)
-            while len(self.encoding.encode(flattened_input_hist)) > self.TOKEN_LIMIT:
-                self.input_history = self.input_history[1:]
-                flattened_input_hist = '\n'.join(self.input_history)
 
-            for context_cmd in context_cmds:  # seeing if recent input is context-changing
-                if context_cmd in cmd[0]:
-                    self.context_history.append([' '.join(cmd), output])
-                    break
-        else:
-            if self.global_switch == 0:
-                self.input_history.append(line)
-                self.global_switch = 1
-            self.context_history.append([line, output])
+        for context_cmd in context_cmds:  # seeing if recent input is context-changing
+            if context_cmd in cmd[0]:
+                self.context_history.append([' '.join(cmd), output])
+                break
+
+    def v3_updateContext(self, cmd: list, output: str):
+        self.context_history.append([' '.join(cmd), output])
 
     def sanitize_output(self, output: str):
         """

@@ -7,8 +7,8 @@ import random
 import psutil
 
 command: dict = {}
-command["command"] = {}
-command["command"]["ps"] = []
+command["command.txt"] = {}
+command["command.txt"]["ps"] = []
 
 randomStates = ["Ss", "S<", "D<", "Ss+"]
 for proc in psutil.process_iter():
@@ -51,6 +51,6 @@ for proc in psutil.process_iter():
             object["TTY"] = "?"
         object["STAT"] = random.choice(randomStates)
         object["TIME"] = info["cpu_times"].user
-        command["command"]["ps"].append(object)
+        command["command.txt"]["ps"].append(object)
 
 print(json.dumps(command, indent=4, sort_keys=True))

@@ -126,7 +126,7 @@ class Term(base_protocol.BaseProtocol):
                             t_wait = abs(random.normalvariate(mu, sig))
                             time.sleep(t_wait)
                             log.msg(
-                                eventid="cowrie.command.input",
+                                eventid="cowrie.command.txt.input",
                                 input=self.command.decode("utf8"),
                                 format="CMD: %(input)s",
                             )

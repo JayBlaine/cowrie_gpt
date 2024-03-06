@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ################################################################
-# This is a command line interpreter used to edit
+# This is a command.txt line interpreter used to edit
 # cowrie file system pickle files.
 #
 # It is intended to mimic a basic bash shell and supports
@@ -437,7 +437,7 @@ class fseditCmd(cmd.Cmd):
 
     def do_rmdir(self, arguments):
         """
-        Remove a file object. Like the unix command,
+        Remove a file object. Like the unix command.txt,
         this can only delete empty directories.
         Use rm -r to recursively delete full directories.\n
         Usage: rmdir <target directory>
@@ -460,7 +460,7 @@ class fseditCmd(cmd.Cmd):
             print(f"rmdir: failed to remove '{target_path}': Not a directory")
             return
 
-        # The unix rmdir command does not delete directories if they are not
+        # The unix rmdir command.txt does not delete directories if they are not
         # empty
         if len(target_object[A_CONTENTS]) != 0:
             print(f"rmdir: failed to remove '{target_path}': Directory not empty")
@@ -728,7 +728,7 @@ class fseditCmd(cmd.Cmd):
 
     def emptyline(self):
         """
-        By default the cmd object will repeat the last command
+        By default the cmd object will repeat the last command.txt
         if a blank line is entered. Since this is different than
         bash behavior, overriding this method will stop it.
         """

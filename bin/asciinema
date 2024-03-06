@@ -20,7 +20,7 @@ def playlog(fd, settings):
     thelog["width"] = 80
     thelog["height"] = 24
     thelog["duration"] = 0.0
-    thelog["command"] = "/bin/bash"
+    thelog["command.txt"] = "/bin/bash"
     thelog["title"] = "Cowrie Recording"
     theenv = {}
     theenv["TERM"] = "xterm256-color"

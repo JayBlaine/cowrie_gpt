@@ -44,7 +44,7 @@ class ExecTerm(base_protocol.BaseProtocol):
 
         try:
             log.msg(
-                eventid="cowrie.command.input",
+                eventid="cowrie.command.txt.input",
                 input=command.decode("utf8"),
                 format="CMD: %(input)s",
             )

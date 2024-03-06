@@ -51,12 +51,12 @@ class TelnetClient(StatefulTelnetProtocol):
         elif self.re_prompt.search(data):
             self.setLineMode()
 
-            # auth is done, send command to server
+            # auth is done, send command.txt to server
             self.send_command(self.transport.factory.command)
 
     def lineReceived(self, line: bytes) -> None:
-        # ignore data sent by server before command is sent
-        # ignore command echo from server
+        # ignore data sent by server before command.txt is sent
+        # ignore command.txt echo from server
         if not self.command or line == self.command:
             return
 
@@ -66,7 +66,7 @@ class TelnetClient(StatefulTelnetProtocol):
 
         self.response += line + b"\r\n"
 
-        # start countdown to command done (when reached, consider the output was completely received and close)
+        # start countdown to command.txt done (when reached, consider the output was completely received and close)
         if not self.done_callback:
             self.done_callback = reactor.callLater(0.5, self.close)  # type: ignore
         else:
@@ -74,7 +74,7 @@ class TelnetClient(StatefulTelnetProtocol):
 
     def send_command(self, command: str) -> None:
         """
-        Sends a command via Telnet using line mode
+        Sends a command.txt via Telnet using line mode
         """
         self.command = command.encode()
         self.sendLine(self.command)  # ignore: attr-defined
@@ -82,12 +82,12 @@ class TelnetClient(StatefulTelnetProtocol):
     def close(self):
         """
         Sends exit to the Telnet server and closes connection.
-        Fires the deferred with the command's output.
+        Fires the deferred with the command.txt's output.
         """
         self.sendLine(b"exit")
         self.transport.loseConnection()
 
-        # deferred to signal command's output was fully received
+        # deferred to signal command.txt's output was fully received
         self.factory.done_deferred.callback(self.response)
 
         # call the request client callback, if any
@@ -102,7 +102,7 @@ class TelnetFactory(ClientFactory):
         self.prompt = prompt
         self.command = command
 
-        # called on command done
+        # called on command.txt done
         self.done_deferred = done_deferred
         self.callback = callback
 
@@ -123,7 +123,7 @@ class TelnetClientCommand:
         self.command = command
 
     def connect(self, host, port, username, password):
-        # deferred to signal command and its output is done
+        # deferred to signal command.txt and its output is done
         done_deferred: defer.Deferred = defer.Deferred()
 
         # start connection to the Telnet server
@@ -137,11 +137,11 @@ class TelnetClientCommand:
 
 def execute_telnet(host, port, username, password, command, callback=None):
     """
-    Executes a command over Telnet. For that, it performs authentication beforehand,
+    Executes a command.txt over Telnet. For that, it performs authentication beforehand,
     and waits some time to get all of the output (slow machines might need the time
     parameter adjusted.
 
-    Returns a deferred that is fired upon receiving the command's output.
+    Returns a deferred that is fired upon receiving the command.txt's output.
     """
     telnet = TelnetClientCommand(callback, ":~#", command)
     return telnet.connect(host, port, username, password)

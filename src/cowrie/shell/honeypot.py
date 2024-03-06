@@ -184,7 +184,7 @@ class HoneyPotShell:
                 #    reactor.callLater(3, self.finish)  # type: ignore[attr-defined]
                 #    return
                 self.cmdpending = []
-                self.protocol.cwd = self.llm_fei.cwd
+                self.protocol.cwd = self.llm_fei.cwd  # TODO: VERIFY THIS WORKS RIGHT
                 self.showPrompt()
             else:
                 # DELAY HERE
